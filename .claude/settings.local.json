@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(test:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(bundle exec rspec:*)",
+      "Bash(bundle:*)",
+      "Bash(ruby --version:*)",
+      "Bash(cmd.exe /c \"ruby --version\")",
+      "Bash(cmd.exe /c \"where ruby\")",
+      "Bash(cmd.exe /c \"ruby --version 2>&1\")",
+      "Bash(echo:*)",
+      "Bash(find:*)",
+      "Bash(xargs -I{} bash -c 'if ! grep -q \"\"# typed:\"\" \"\"{}\"\"; then sed -i \"\"1s/^/# typed: ignore\\\\n/\"\" \"\"{}\"\"; fi')",
+      "Bash(xargs sed:*)",
+      "Bash(gem list:*)",
+      "Bash(gem contents:*)",
+      "Bash(grep:*)",
+      "Bash(gem build:*)"
+    ]
+  }
+}

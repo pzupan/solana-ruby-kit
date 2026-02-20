@@ -1,0 +1,8 @@
+# frozen_string_literal: true
+
+Solana::Ruby::Kit.configure do |config|
+  # config.rpc_url    = 'https://api.mainnet-beta.solana.com'
+  # config.ws_url     = 'wss://api.mainnet-beta.solana.com'
+  # config.commitment = :confirmed
+  # config.timeout    = 30
+end
