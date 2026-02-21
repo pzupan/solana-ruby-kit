@@ -13,12 +13,15 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir['lib/**/*.rb', 'lib/**/*.tt', 'solana-ruby-kit.gemspec']
 
-  spec.add_dependency 'openssl',                 '~> 3.3'
+  spec.add_dependency 'openssl', '~> 3.3'
   spec.add_dependency 'sorbet-runtime'
   spec.add_dependency 'rbnacl'
   spec.add_dependency 'websocket-client-simple'
 
   spec.add_development_dependency 'sorbet'
+  spec.add_development_dependency 'drb'
+  spec.add_development_dependency 'sexp_processor'
+  spec.add_development_dependency 'parser'
   spec.add_development_dependency 'tapioca'
   spec.add_development_dependency 'rake'
   spec.add_development_dependency 'rspec'
