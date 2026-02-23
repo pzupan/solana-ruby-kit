@@ -57,6 +57,100 @@ msg = Kit::Functional.pipe(
 )
 ```
 
+## Create a wallet
+
+Generating a keypair creates the wallet **locally**. The wallet only exists **on-chain** once it receives SOL — Solana allocates account storage at that point. On devnet you can fund it with an airdrop; on mainnet someone must send SOL to the address.
+
+```ruby
+require 'solana/ruby/kit'
+
+Kit = Solana::Ruby::Kit
+
+# ── 1. Generate the keypair (local only, not yet on-chain) ────────────────────
+
+signer = Kit::Signers.generate_key_pair_signer
+puts "Address: #{signer.address}"
+
+# ── 2. Save to disk ───────────────────────────────────────────────────────────
+# Standard format: 64 raw bytes = 32-byte private seed || 32-byte public key.
+# Compatible with `solana-keygen new` and Phantom's export format.
+
+kp        = signer.key_pair
+raw_bytes = kp.signing_key.to_bytes + kp.verify_key.to_bytes
+File.binwrite('wallet.bin', raw_bytes)
+
+# ── 3. Fund the wallet on-chain (devnet / testnet only) ───────────────────────
+# request_airdrop is the System Program creating the account and crediting SOL.
+# On mainnet, skip this and have another wallet send SOL to signer.address instead.
+
+rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
+
+airdrop_sig = rpc.request_airdrop(signer.address.to_s, 1_000_000_000) # 1 SOL in lamports
+puts "Airdrop signature: #{airdrop_sig}"
+
+# ── 4. Wait for the airdrop transaction to confirm ────────────────────────────
+
+Kit::TransactionConfirmation.wait_for_confirmation(
+  rpc,
+  airdrop_sig,
+  commitment:   :confirmed,
+  timeout_secs: 30
+)
+puts "Confirmed."
+
+# ── 5. Verify the account exists on-chain ─────────────────────────────────────
+
+balance = rpc.get_balance(signer.address)
+puts "Balance: #{balance.value / 1_000_000_000.0} SOL"   # => "1.0 SOL"
+
+# ── Load from disk later ──────────────────────────────────────────────────────
+
+loaded = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
+puts loaded.address  # same address
+```
+
+## Transfer SOL from one wallet to another
+
+```ruby
+require 'base64'
+require 'solana/ruby/kit'
+
+Kit = Solana::Ruby::Kit
+
+# ── 1. Load your sender keypair ───────────────────────────────────────────────────
+sender = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
+
+recipient = Kit::Addresses.address('RECIPIENT_ADDRESS_HERE')
+
+# ── 2. Build the transfer instruction (0.5 SOL) ───────────────────────────────────
+ix = Kit::Programs::SystemProgram.transfer_instruction(
+  sender:    sender.address,
+  recipient: recipient,
+  lamports:  500_000_000
+)
+
+# ── 2. Fetch blockhash, build message, compile, sign, send ───────────────────────────────────
+rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
+bh  = rpc.get_latest_blockhash
+
+message = Kit::Functional.pipe(
+  Kit::TransactionMessages.create_transaction_message(version: :legacy),
+  ->(tx) { Kit::TransactionMessages.set_fee_payer(sender.address, tx) },
+  ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(
+    Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
+      blockhash: bh.value.blockhash, last_valid_block_height: bh.value.last_valid_block_height
+    ), tx) },
+  ->(tx) { Kit::TransactionMessages.append_instructions(tx, [ix]) }
+)
+
+transaction = Kit::Transactions.compile_transaction_message(message)
+signed      = Kit::Transactions.sign_transaction([sender.key_pair.signing_key], transaction)
+wire_base64 = Base64.strict_encode64(Kit::Transactions.wire_encode_transaction(signed))
+
+sig = rpc.send_transaction(wire_base64)
+puts "Signature: #{sig}"
+```
+
 ## Create an Associated Token Account
 
 A complete example showing how to create an SPL token account for a wallet. The ATA address is deterministic — derived from the wallet + mint — so no extra keypair is needed.
