@@ -3,3 +3,4 @@
 
 # Transaction types and signing utilities — mirrors @solana/transactions.
 require_relative 'transactions/transaction'
+require_relative 'transactions/compiler'

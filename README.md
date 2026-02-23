@@ -57,6 +57,85 @@ msg = Kit::Functional.pipe(
 )
 ```
 
+## Create an Associated Token Account
+
+A complete example showing how to create an SPL token account for a wallet. The ATA address is deterministic — derived from the wallet + mint — so no extra keypair is needed.
+
+```ruby
+require 'base64'
+require 'solana/ruby/kit'
+
+Kit = Solana::Ruby::Kit
+
+# ── 1. Signer and addresses ───────────────────────────────────────────────────
+
+# Load your payer from 64 raw bytes (seed || public key).
+# Replace File.binread with however you store your keypair.
+payer = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
+
+mint = Kit::Addresses.address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') # USDC
+
+# ── 2. Derive the ATA address ─────────────────────────────────────────────────
+
+ata_pda = Kit::Programs::AssociatedTokenAccount.get_associated_token_address(
+  wallet: payer.address,
+  mint:   mint
+)
+
+puts "ATA address : #{ata_pda.address}"   # deterministic, no RPC call needed
+puts "Bump seed   : #{ata_pda.bump}"
+
+# ── 3. Build the instruction ──────────────────────────────────────────────────
+
+# idempotent: true — the transaction succeeds even if the ATA already exists.
+ix = Kit::Programs::AssociatedTokenAccount.create_instruction(
+  payer:      payer.address,
+  wallet:     payer.address,
+  mint:       mint,
+  idempotent: true
+)
+
+# ── 4. Fetch a recent blockhash ───────────────────────────────────────────────
+
+rpc = Kit::Rpc::Client.new(Kit::RpcTypes.mainnet)
+
+bh = rpc.get_latest_blockhash
+constraint = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
+  blockhash:               bh.value.blockhash,
+  last_valid_block_height: bh.value.last_valid_block_height
+)
+
+# ── 5. Build the transaction message ─────────────────────────────────────────
+
+message = Kit::Functional.pipe(
+  Kit::TransactionMessages.create_transaction_message(version: :legacy),
+  ->(tx) { Kit::TransactionMessages.set_fee_payer(payer.address, tx) },
+  ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, tx) },
+  ->(tx) { Kit::TransactionMessages.append_instructions(tx, [ix]) }
+)
+
+# ── 6. Compile → sign → encode → send ────────────────────────────────────────
+
+# compile_transaction_message serialises the message into Solana's on-wire
+# format and reserves a nil signature slot for every required signer.
+transaction = Kit::Transactions.compile_transaction_message(message)
+
+# sign_transaction fills every slot and raises if any signer is missing.
+signed = Kit::Transactions.sign_transaction(
+  [payer.key_pair.signing_key],
+  transaction
+)
+
+# wire_encode_transaction prepends the compact-u16 signature count + raw
+# 64-byte signatures to the message bytes — the full payload for sendTransaction.
+wire_base64 = Base64.strict_encode64(
+  Kit::Transactions.wire_encode_transaction(signed)
+)
+
+signature = rpc.send_transaction(wire_base64, skip_preflight: false)
+puts "Transaction signature: #{signature}"
+```
+
 ## Rails
 
 The gem includes a Railtie that auto-configures when Rails is present. Add it to your `Gemfile` as usual, then run the install generator:
@@ -213,16 +292,25 @@ msg = TxMsg.set_durable_nonce_lifetime(nonce_constraint, msg)
 
 ### `Solana::Ruby::Kit::Transactions` — `@solana/transactions`
 
-Sign and inspect compiled transactions.
+Compile, sign, and inspect transactions.
 
 ```ruby
 Txns = Solana::Ruby::Kit::Transactions
+
+# Compile a TransactionMessage into wire bytes + an empty signatures map.
+# message_bytes are the bytes that each required signer must sign.
+transaction = Txns.compile_transaction_message(message)
 
 # Partially sign (one or more keys, not necessarily all signers)
 tx = Txns.partially_sign_transaction([kp.signing_key], transaction)
 
 # Fully sign (raises unless all signers have signed)
 signed_tx = Txns.sign_transaction([kp.signing_key], transaction)
+
+# Encode the fully signed transaction for submission via sendTransaction.
+# Prepends compact-u16 signature count + 64-byte signatures to message bytes.
+wire_bytes  = Txns.wire_encode_transaction(signed_tx)
+wire_base64 = Base64.strict_encode64(wire_bytes)
 
 # Get the transaction signature (fee payer's signature, base58)
 sig = Txns.get_signature_from_transaction(signed_tx)
@@ -398,18 +486,47 @@ rent.exemption_threshold     # => Float
 
 ### `Solana::Ruby::Kit::Programs` — `@solana/programs`
 
-Program-specific error helpers.
+Program error helpers and well-known program interfaces.
 
 ```ruby
 Programs = Solana::Ruby::Kit::Programs
 
-Programs::SYSTEM_PROGRAM_ADDRESS
-Programs::TOKEN_PROGRAM_ADDRESS
-Programs::TOKEN_2022_PROGRAM_ADDRESS
-Programs::ASSOCIATED_TOKEN_PROGRAM_ADDRESS
+# Inspect custom program errors in transaction simulation results
+Programs.program_error?(err)                   # => true / false
+Programs.program_error?(err, expected_code: 1) # match a specific code
+Programs.get_program_error_code(err)           # => Integer or nil
+```
 
-# Parse a program error from an RPC simulation response
-Programs.parse_program_error(rpc_error_context)
+#### `Programs::AssociatedTokenAccount`
+
+Create SPL token accounts at their canonical (Associated Token Account) address.
+
+```ruby
+ATA = Solana::Ruby::Kit::Programs::AssociatedTokenAccount
+
+# Well-known program IDs
+ATA::PROGRAM_ID          # ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe8bSe
+ATA::TOKEN_PROGRAM_ID    # TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+ATA::TOKEN_2022_PROGRAM_ID
+ATA::SYSTEM_PROGRAM_ID
+
+# Derive the ATA address (no RPC call required)
+pda = ATA.get_associated_token_address(
+  wallet:           owner_address,
+  mint:             mint_address,
+  token_program_id: ATA::TOKEN_PROGRAM_ID   # default; omit for SPL Token
+)
+pda.address  # => Addresses::Address (the ATA)
+pda.bump     # => Integer
+
+# Build the createAssociatedTokenAccount instruction
+ix = ATA.create_instruction(
+  payer:            fee_payer_address,  # pays rent
+  wallet:           owner_address,      # will own the ATA
+  mint:             mint_address,
+  token_program_id: ATA::TOKEN_PROGRAM_ID,
+  idempotent:       true   # use CreateIdempotent — safe to call if ATA exists
+)
 ```
 
 ### `Solana::Ruby::Kit::OffchainMessages` — `@solana/signers`

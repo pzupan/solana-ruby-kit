@@ -3,6 +3,7 @@
 
 # Mirrors @solana/programs — helpers for inspecting custom program errors
 # returned in Solana transaction failures.
+require_relative 'programs/associated_token_account'
 #
 # A program error in a transaction result looks like:
 #   { "InstructionError" => [0, { "Custom" => 1234 }] }
