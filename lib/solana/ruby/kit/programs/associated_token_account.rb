@@ -25,7 +25,7 @@ module Solana::Ruby::Kit
 
       # SPL Associated Token Account program.
       PROGRAM_ID = T.let(
-        Addresses::Address.new('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe8bSe'),
+        Addresses::Address.new('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'),
         Addresses::Address
       )
 

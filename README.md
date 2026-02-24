@@ -593,7 +593,7 @@ Create SPL token accounts at their canonical (Associated Token Account) address.
 ATA = Solana::Ruby::Kit::Programs::AssociatedTokenAccount
 
 # Well-known program IDs
-ATA::PROGRAM_ID          # ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe8bSe
+ATA::PROGRAM_ID          # ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
 ATA::TOKEN_PROGRAM_ID    # TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
 ATA::TOKEN_2022_PROGRAM_ID
 ATA::SYSTEM_PROGRAM_ID
