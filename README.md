@@ -169,19 +169,10 @@ payer = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'
 
 mint = Kit::Addresses.address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') # USDC
 
-# ── 2. Derive the ATA address ─────────────────────────────────────────────────
+# ── 2. Build the instruction ──────────────────────────────────────────────────
+# create_instruction derives the ATA address internally. Passing idempotent: true
+# means the transaction succeeds even if the ATA already exists.
 
-ata_pda = Kit::Programs::AssociatedTokenAccount.get_associated_token_address(
-  wallet: payer.address,
-  mint:   mint
-)
-
-puts "ATA address : #{ata_pda.address}"   # deterministic, no RPC call needed
-puts "Bump seed   : #{ata_pda.bump}"
-
-# ── 3. Build the instruction ──────────────────────────────────────────────────
-
-# idempotent: true — the transaction succeeds even if the ATA already exists.
 ix = Kit::Programs::AssociatedTokenAccount.create_instruction(
   payer:      payer.address,
   wallet:     payer.address,
@@ -189,7 +180,10 @@ ix = Kit::Programs::AssociatedTokenAccount.create_instruction(
   idempotent: true
 )
 
-# ── 4. Fetch a recent blockhash ───────────────────────────────────────────────
+# The derived ATA address is the second account in the instruction.
+puts "ATA address : #{ix.accounts[1].address}"
+
+# ── 3. Fetch a recent blockhash ───────────────────────────────────────────────
 
 rpc = Kit::Rpc::Client.new(Kit::RpcTypes.mainnet)
 
@@ -199,7 +193,7 @@ constraint = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
   last_valid_block_height: bh.value.last_valid_block_height
 )
 
-# ── 5. Build the transaction message ─────────────────────────────────────────
+# ── 4. Build the transaction message ─────────────────────────────────────────
 
 message = Kit::Functional.pipe(
   Kit::TransactionMessages.create_transaction_message(version: :legacy),
@@ -208,7 +202,7 @@ message = Kit::Functional.pipe(
   ->(tx) { Kit::TransactionMessages.append_instructions(tx, [ix]) }
 )
 
-# ── 6. Compile → sign → encode → send ────────────────────────────────────────
+# ── 5. Compile → sign → encode → send ────────────────────────────────────────
 
 # compile_transaction_message serialises the message into Solana's on-wire
 # format and reserves a nil signature slot for every required signer.

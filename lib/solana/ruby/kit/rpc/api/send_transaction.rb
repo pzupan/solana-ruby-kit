@@ -3,6 +3,7 @@
 
 require 'base64'
 require_relative '../../keys/signatures'
+require_relative '../../transactions/compiler'
 
 module Solana::Ruby::Kit
   module Rpc
@@ -43,7 +44,7 @@ module Solana::Ruby::Kit
               transaction
             else
               # Assume it responds to .message_bytes (Transactions::Transaction)
-              Base64.strict_encode64(transaction.message_bytes)
+              Base64.strict_encode64(Transactions.wire_encode_transaction(transaction))
             end
 
           config = { 'encoding' => 'base64' }
