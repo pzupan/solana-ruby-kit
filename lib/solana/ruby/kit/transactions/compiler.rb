@@ -9,7 +9,18 @@ require_relative '../errors'
 
 module Solana::Ruby::Kit
   module Transactions
+    # Maximum wire-encoded transaction size in bytes (Solana protocol limit).
+    TRANSACTION_SIZE_LIMIT = T.let(1232, Integer)
+
     module_function
+
+    # Returns the compiled byte-size of a transaction message.
+    # Mirrors `getTransactionMessageSize()` from @solana/transactions.
+    # The message must have a fee payer and a blockhash lifetime set.
+    sig { params(message: TransactionMessages::TransactionMessage).returns(Integer) }
+    def get_transaction_message_size(message)
+      compile_transaction_message(message).message_bytes.bytesize
+    end
 
     # ---------------------------------------------------------------------------
     # compile_transaction_message
@@ -39,10 +50,6 @@ module Solana::Ruby::Kit
     def compile_transaction_message(message)
       Kernel.raise SolanaError.new(:SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING) if message.fee_payer.nil?
       fee_payer = T.must(message.fee_payer)
-
-      constraint = message.lifetime_constraint
-      Kernel.raise SolanaError.new(:SOLANA_ERROR__TRANSACTION__EXPECTED_BLOCKHASH_LIFETIME) unless constraint.is_a?(TransactionMessages::BlockhashLifetimeConstraint)
-      blockhash_str = constraint.blockhash
 
       # ── 1. Collect accounts and merge roles ────────────────────────────────
       # Insertion-ordered hash: address_str → merged AccountRole integer.
@@ -115,7 +122,19 @@ module Solana::Ruby::Kit
       end
 
       # ── 6. Recent blockhash (32 bytes) ─────────────────────────────────────
-      blockhash_bytes = Addresses.decode_address(Addresses::Address.new(blockhash_str))
+      # Mirrors upstream compile-transaction.ts #581:
+      #   - BlockhashLifetime → use the blockhash bytes
+      #   - DurableNonceLifetime → use the nonce value bytes (stored in the same field)
+      #   - No lifetime → 32 zero bytes (placeholder; must be replaced before signing)
+      constraint = message.lifetime_constraint
+      blockhash_bytes =
+        if constraint.is_a?(TransactionMessages::BlockhashLifetimeConstraint)
+          Addresses.decode_address(Addresses::Address.new(constraint.blockhash))
+        elsif constraint.is_a?(TransactionMessages::DurableNonceLifetimeConstraint)
+          Addresses.decode_address(Addresses::Address.new(constraint.nonce))
+        else
+          ("\x00" * 32).b
+        end
 
       # ── 7. Instructions section ────────────────────────────────────────────
       ixs_section = encode_compact_u16(message.instructions.size)

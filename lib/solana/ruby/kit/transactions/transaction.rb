@@ -67,6 +67,42 @@ module Solana::Ruby::Kit
       )
     end
 
+    # Returns true if the wire-encoded transaction fits within TRANSACTION_SIZE_LIMIT.
+    # Mirrors `isTransactionWithinSizeLimit(transaction)`.
+    sig { params(transaction: Transaction).returns(T::Boolean) }
+    def within_size_limit?(transaction)
+      wire_encode_transaction(transaction).bytesize <= TRANSACTION_SIZE_LIMIT
+    end
+
+    # Raises SolanaError if the wire-encoded transaction exceeds TRANSACTION_SIZE_LIMIT.
+    # Mirrors `assertIsTransactionWithinSizeLimit(transaction)`.
+    sig { params(transaction: Transaction).void }
+    def assert_within_size_limit!(transaction)
+      actual = wire_encode_transaction(transaction).bytesize
+      return if actual <= TRANSACTION_SIZE_LIMIT
+
+      Kernel.raise SolanaError.new(
+        SolanaError::TRANSACTIONS__EXCEEDS_SIZE_LIMIT,
+        { actual_size: actual, limit: TRANSACTION_SIZE_LIMIT }
+      )
+    end
+
+    # Returns true if the transaction is both fully signed and within the size limit.
+    # Mirrors `isSendableTransaction(transaction)`.
+    # sendableTransaction = FullySignedTransaction & TransactionWithinSizeLimit
+    sig { params(transaction: Transaction).returns(T::Boolean) }
+    def sendable_transaction?(transaction)
+      fully_signed_transaction?(transaction) && within_size_limit?(transaction)
+    end
+
+    # Raises SolanaError unless the transaction is fully signed and within size limit.
+    # Mirrors `assertIsSendableTransaction(transaction)`.
+    sig { params(transaction: Transaction).void }
+    def assert_sendable_transaction!(transaction)
+      assert_fully_signed_transaction!(transaction)
+      assert_within_size_limit!(transaction)
+    end
+
     # Signs a transaction with one or more RbNaCl::SigningKey objects.
     # Only keys whose address appears in `transaction.signatures` are applied.
     # Raises SolanaError if a key is not expected to sign this transaction.

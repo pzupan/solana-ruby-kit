@@ -5,7 +5,7 @@ require_relative 'lib/solana/ruby/kit/version'
 Gem::Specification.new do |spec|
   spec.name                  = 'solana-ruby-kit'
   spec.version               = Solana::Ruby::Kit::VERSION
-  spec.authors               = ['Paul Zupan']
+  spec.authors               = ['Paul Zupan, Idhra Inc.']
   spec.summary               = 'Ruby port of the Anza TypeScript SDK (@anza-xyz/kit)'
   spec.license               = 'MIT'
   spec.required_ruby_version = '>= 3.2.0'

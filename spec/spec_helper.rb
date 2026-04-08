@@ -2,7 +2,8 @@
 # frozen_string_literal: true
 
 require 'sorbet-runtime'
-require_relative '../lib/ruby_kit'
+require_relative '../lib/solana/ruby/kit'
+RubyKit = Solana::Ruby::Kit
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|

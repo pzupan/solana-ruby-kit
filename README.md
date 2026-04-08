@@ -387,6 +387,9 @@ Txns = Solana::Ruby::Kit::Transactions
 
 # Compile a TransactionMessage into wire bytes + an empty signatures map.
 # message_bytes are the bytes that each required signer must sign.
+# A lifetime constraint (blockhash or durable nonce) is optional at compile
+# time — omitting it writes 32 zero bytes into the blockhash field, which
+# must be replaced before the transaction is valid for submission.
 transaction = Txns.compile_transaction_message(message)
 
 # Partially sign (one or more keys, not necessarily all signers)
@@ -403,9 +406,16 @@ wire_base64 = Base64.strict_encode64(wire_bytes)
 # Get the transaction signature (fee payer's signature, base58)
 sig = Txns.get_signature_from_transaction(signed_tx)
 
-# Check completeness
-Txns.fully_signed_transaction?(tx)    # => true / false
+# Check completeness and size
+Txns.fully_signed_transaction?(tx)      # => true / false
 Txns.assert_fully_signed_transaction!(tx)
+
+Txns.within_size_limit?(tx)             # => true if wire size <= 1232 bytes
+Txns.assert_within_size_limit!(tx)
+
+# Sendable = fully signed AND within size limit
+Txns.sendable_transaction?(signed_tx)   # => true / false
+Txns.assert_sendable_transaction!(signed_tx)
 ```
 
 ### `Solana::Ruby::Kit::Rpc` — `@solana/rpc`
@@ -648,13 +658,65 @@ Confirm.confirm_transaction(
 
 ### `Solana::Ruby::Kit::InstructionPlans` — `@solana/instruction-plans`
 
-Plan and execute multi-transaction instruction sequences.
+Plan and execute instruction sequences that may span multiple transactions.
+The planner packs instructions into messages respecting the 1232-byte transaction
+size limit; the executor walks the resulting plan tree and sends each transaction.
 
 ```ruby
+require 'base64'
 Plans = Solana::Ruby::Kit::InstructionPlans
+Kit   = Solana::Ruby::Kit
 
+# ── 1. Build an instruction plan ─────────────────────────────────────────────
+# Instructions are auto-wrapped in SingleInstructionPlan.
+# Use parallel_instruction_plan for instructions that can run concurrently.
 plan = Plans.sequential_instruction_plan([ix1, ix2, ix3])
-Plans.execute_plan(plan, rpc: rpc, signer: signer)
+
+# ── 2. Create a planner ───────────────────────────────────────────────────────
+# create_transaction_message is called whenever a new (empty) transaction is
+# needed. It must return a message with a fee payer and blockhash already set.
+planner = Plans.create_transaction_planner(
+  create_transaction_message: -> {
+    Kit::Functional.pipe(
+      Kit::TransactionMessages.create_transaction_message(version: :legacy),
+      ->(tx) { Kit::TransactionMessages.set_fee_payer(signer.address, tx) },
+      ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, tx) }
+    )
+  }
+)
+
+# plan! distributes instructions across as few transactions as possible.
+transaction_plan = planner.call(plan)
+
+# ── 3. Create an executor and run it ─────────────────────────────────────────
+# execute_transaction_message receives each fully-packed TransactionMessage and
+# must return { transaction: <signed Transaction>, context: <optional Hash> }.
+# If it raises, the executor cancels all remaining messages and re-raises.
+executor = Plans.create_transaction_plan_executor(
+  execute_transaction_message: ->(message) {
+    transaction = Kit::Transactions.compile_transaction_message(message)
+    signed      = Kit::Transactions.sign_transaction([signer.key_pair.signing_key], transaction)
+    wire        = Base64.strict_encode64(Kit::Transactions.wire_encode_transaction(signed))
+    rpc.send_transaction(wire)
+    { transaction: signed }
+  }
+)
+
+result = executor.call(transaction_plan)
+# result is a TransactionPlanResult tree mirroring the transaction_plan structure.
+# Each leaf is a SingleTransactionPlanResult with status :successful, :failed, or :canceled.
+
+# ── 4. Plan types ─────────────────────────────────────────────────────────────
+Plans.single_instruction_plan(ix)                      # wrap one instruction
+Plans.sequential_instruction_plan([ix1, ix2])          # ordered, divisible
+Plans.non_divisible_sequential_instruction_plan([ix1, ix2])  # must be atomic
+Plans.parallel_instruction_plan([ix1, ix2])            # any order / same tx
+
+# MessagePacker plans for instructions of variable size (e.g. large data writes)
+Plans.get_linear_message_packer_instruction_plan(
+  total_length:    data.bytesize,
+  get_instruction: ->(offset, length) { build_write_ix(offset, data[offset, length]) }
+)
 ```
 
 ## Error handling

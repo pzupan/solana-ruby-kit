@@ -46,6 +46,7 @@ module Solana::Ruby::Kit
 
     # ── Transactions ──────────────────────────────────────────────────────────
     TRANSACTIONS__TRANSACTION_NOT_SIGNABLE               = :SOLANA_ERROR__TRANSACTIONS__TRANSACTION_NOT_SIGNABLE
+    TRANSACTIONS__EXCEEDS_SIZE_LIMIT                     = :SOLANA_ERROR__TRANSACTION__EXCEEDS_SIZE_LIMIT
     TRANSACTIONS__MISSING_SIGNER                         = :SOLANA_ERROR__TRANSACTIONS__MISSING_SIGNER
     TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE            = :SOLANA_ERROR__TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE
     TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS = :SOLANA_ERROR__TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS
@@ -87,6 +88,13 @@ module Solana::Ruby::Kit
     RPC__INTEGER_OVERFLOW_WHILE_SERIALIZING_LARGE_INTEGER = :SOLANA_ERROR__RPC__INTEGER_OVERFLOW_WHILE_SERIALIZING_LARGE_INTEGER
     RPC__INTEGER_OVERFLOW_WHILE_DESERIALIZING_LARGE_INTEGER = :SOLANA_ERROR__RPC__INTEGER_OVERFLOW_WHILE_DESERIALIZING_LARGE_INTEGER
     RPC__TRANSPORT_HTTP_ERROR                             = :SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR
+    # JSON-RPC server errors (-32017..-32019); context keys mirror TypeScript SolanaErrorContext:
+    #   EPOCH_REWARDS_PERIOD_ACTIVE: { slot:, current_block_height:, rewards_complete_block_height: }
+    #   SLOT_NOT_EPOCH_BOUNDARY:     { slot: }
+    #   LONG_TERM_STORAGE_UNREACHABLE: (no context)
+    JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE    = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE
+    JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY        = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY
+    JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE  = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE
     RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST
     RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID   = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID
     RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED
@@ -101,9 +109,18 @@ module Solana::Ruby::Kit
     OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG                  = :SOLANA_ERROR__OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG
     OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN    = :SOLANA_ERROR__OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN
 
+    # ── Instruction plans ─────────────────────────────────────────────────────
+    # context: { num_bytes_required:, num_free_bytes: }
+    INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN      = :SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN
+    INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE      = :SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE
+    INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN               = :SOLANA_ERROR__INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN
+    INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN   = :SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN
+
     # ── Invariant violations (internal) ──────────────────────────────────────
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE
+    INVARIANT_VIOLATION__INVALID_INSTRUCTION_PLAN_KIND      = :SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_INSTRUCTION_PLAN_KIND
+    INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND      = :SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND
 
     ERROR_MESSAGES = T.let(
       {
@@ -145,6 +162,7 @@ module Solana::Ruby::Kit
 
         # Transactions
         TRANSACTIONS__TRANSACTION_NOT_SIGNABLE           => 'Transaction is not signable (missing fee payer or lifetime constraint)',
+        TRANSACTIONS__EXCEEDS_SIZE_LIMIT                 => 'Transaction wire size (%{actual_size} bytes) exceeds the limit of %{limit} bytes',
         TRANSACTIONS__MISSING_SIGNER                     => 'Transaction is missing a required signer: %{address}',
         TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE        => 'Transaction version %{version} is out of range',
         TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS => 'Failed to decompile address lookup table contents',
@@ -186,6 +204,9 @@ module Solana::Ruby::Kit
         RPC__INTEGER_OVERFLOW_WHILE_SERIALIZING_LARGE_INTEGER   => 'Integer overflow while serializing large integer %{value}',
         RPC__INTEGER_OVERFLOW_WHILE_DESERIALIZING_LARGE_INTEGER => 'Integer overflow while deserializing large integer %{value}',
         RPC__TRANSPORT_HTTP_ERROR                               => 'HTTP transport error: %{status} %{message}',
+        JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE      => 'Epoch rewards period still active at slot %{slot}',
+        JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY          => "Rewards cannot be found because slot %{slot} is not the epoch boundary. This may be due to gap in the queried node's local ledger or long-term storage",
+        JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE    => 'Failed to query long-term storage; please try again',
         RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST  => 'Cannot create subscription request',
         RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID     => 'Expected server to return a subscription ID',
         RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED => 'WebSocket channel closed before message could be buffered',
@@ -200,9 +221,17 @@ module Solana::Ruby::Kit
         OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG              => 'Offchain message is too long (%{length} bytes, max %{max})',
         OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN => 'Offchain message signing domain must not start with a null byte',
 
+        # Instruction plans
+        INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN    => 'Transaction message cannot accommodate the plan: requires %{num_bytes_required} bytes but only %{num_free_bytes} are available',
+        INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE    => 'Message packer is already complete; no more instructions to pack',
+        INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN             => 'Instruction plan is empty and produced no transaction messages',
+        INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN => 'Failed to execute transaction plan',
+
         # Invariant violations
         INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING => 'Subscription iterator state is missing (internal error)',
         INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE => 'Subscription iterator must not poll before resolving existing message (internal error)',
+        INVARIANT_VIOLATION__INVALID_INSTRUCTION_PLAN_KIND    => 'Invalid instruction plan kind: %{kind} (internal error)',
+        INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND    => 'Invalid transaction plan kind: %{kind} (internal error)',
       }.freeze,
       T::Hash[Symbol, String]
     )
