@@ -714,7 +714,7 @@ Create and delegate stake accounts.
 Stake = Solana::Ruby::Kit::Programs::StakeProgram
 
 # Well-known addresses
-Stake::PROGRAM_ID       # Stake11111111111111111111111111111111111111111
+Stake::PROGRAM_ID       # Stake11111111111111111111111111111111111111
 Stake::STAKE_CONFIG_ID  # StakeConfig11111111111111111111111111111111
 Stake::STAKE_ACCOUNT_SPACE  # => 200 (bytes required for a stake account)
 
@@ -857,6 +857,100 @@ Plans.get_linear_message_packer_instruction_plan(
   total_length:    data.bytesize,
   get_instruction: ->(offset, length) { build_write_ix(offset, data[offset, length]) }
 )
+```
+
+### `Solana::Ruby::Kit::WalletStandard` — `@solana/wallet-standard`
+
+Server-side handling of the [Wallet Standard](https://github.com/wallet-standard/wallet-standard)
+`signTransaction` interface. A browser wallet (Phantom, Backpack, Solflare, …) signs a
+transaction and returns wire bytes; Rails decodes those bytes and verifies every Ed25519
+signature without broadcasting — because Solana addresses **are** Ed25519 public keys, no
+additional key lookup is required.
+
+#### Verify a wallet-signed transaction in a Rails controller
+
+```ruby
+# app/controllers/payments_controller.rb
+require 'base64'
+
+WS = Solana::Ruby::Kit::WalletStandard
+TX = Solana::Ruby::Kit::Transactions
+
+class PaymentsController < ApplicationController
+  # POST /payments/verify
+  # Body: { signed_transaction: "<base64 wire bytes from wallet>" }
+  def verify
+    wire_bytes = Base64.strict_decode64(params[:signed_transaction])
+
+    # 1. Decode the wallet output and verify every present signature.
+    #    Raises WalletStandard::SIGNATURE_VERIFICATION_FAILED on any mismatch.
+    tx = WS.verify_signed_transaction!(wire_bytes)
+
+    # 2. Assert all required signers have signed (no nil slots remain).
+    TX.assert_fully_signed_transaction!(tx)
+
+    # 3. Confirm the expected wallet address actually signed.
+    wallet_address = Solana::Ruby::Kit::Addresses::Address.new(params[:wallet_address])
+    render json: { error: 'wrong signer' }, status: :unprocessable_entity and return \
+      unless WS.signed_by?(tx, wallet_address)
+
+    # 4. Optionally broadcast through your own RPC node instead of the browser.
+    rpc      = Solana::Ruby::Kit.rpc_client
+    wire_b64 = Base64.strict_encode64(TX.wire_encode_transaction(tx))
+    sig      = rpc.send_transaction(wire_b64, encoding: 'base64')
+
+    render json: { signature: sig.value }
+  rescue Solana::Ruby::Kit::SolanaError => e
+    render json: { error: e.message, code: e.code }, status: :unprocessable_entity
+  end
+end
+```
+
+#### Build the transaction server-side, send to the browser for signing, then verify
+
+```ruby
+Kit = Solana::Ruby::Kit
+WS  = Kit::WalletStandard
+
+# ── Server: build and serialise the unsigned transaction ─────────────────────
+fee_payer   = Kit::Addresses::Address.new(params[:wallet_address])
+rpc         = Kit.rpc_client
+latest      = rpc.get_latest_blockhash
+constraint  = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
+  blockhash:               latest['blockhash'],
+  last_valid_block_height: latest['lastValidBlockHeight']
+)
+
+message = Kit::Functional.pipe(
+  Kit::TransactionMessages.create_transaction_message(version: :legacy),
+  ->(m) { Kit::TransactionMessages.set_fee_payer(fee_payer, m) },
+  ->(m) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, m) }
+)
+
+compiled        = Kit::Transactions.compile_transaction_message(message)
+unsigned_wire   = Kit::Transactions.wire_encode_transaction(compiled)
+unsigned_base64 = Base64.strict_encode64(unsigned_wire)
+
+# → send unsigned_base64 to the browser
+# → browser calls: wallet.features['solana:signTransaction'].signTransaction(tx)
+# → browser POSTs { signed_transaction: "<base64>" } back to /payments/verify
+
+# ── Server: receive and verify the signed transaction ────────────────────────
+tx = WS.verify_signed_transaction!(Base64.strict_decode64(params[:signed_transaction]))
+Kit::Transactions.assert_fully_signed_transaction!(tx)
+```
+
+#### Wallet Standard feature constants
+
+Use these when building frontend metadata or documenting required wallet capabilities:
+
+```ruby
+WS = Solana::Ruby::Kit::WalletStandard
+
+WS::SIGN_TRANSACTION          # => 'solana:signTransaction'
+WS::SIGN_AND_SEND_TRANSACTION # => 'solana:signAndSendTransaction'
+WS::SIGN_MESSAGE              # => 'solana:signMessage'
+WS::CONNECT                   # => 'standard:connect'
 ```
 
 ## Error handling

@@ -23,7 +23,7 @@ module Solana::Ruby::Kit
 
       # The Stake Program address.
       PROGRAM_ID = T.let(
-        Addresses::Address.new('Stake11111111111111111111111111111111111111111'),
+        Addresses::Address.new('Stake11111111111111111111111111111111111111'),
         Addresses::Address
       )
 

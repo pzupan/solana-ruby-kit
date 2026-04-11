@@ -41,6 +41,9 @@ require_relative 'kit/rpc_subscriptions'
 # ── Plugin system ─────────────────────────────────────────────────────────────
 require_relative 'kit/plugin_core'
 
+# ── Wallet Standard (server-side signature verification) ──────────────────────
+require_relative 'kit/wallet_standard'
+
 # ── Higher-level helpers ──────────────────────────────────────────────────────
 require_relative 'kit/offchain_messages'
 require_relative 'kit/programs'
@@ -75,6 +78,7 @@ require_relative 'kit/instruction_plans'
 #   Solana::Ruby::Kit::Sysvars               — sysvar fetch/decode      (@solana/sysvars)
 #   Solana::Ruby::Kit::TransactionConfirmation — confirmation polling   (@solana/transaction-confirmation)
 #   Solana::Ruby::Kit::InstructionPlans      — multi-tx planning        (@solana/instruction-plans)
+#   Solana::Ruby::Kit::WalletStandard        — server-side sig verify   (@solana/wallet-standard)
 
 module Solana::Ruby::Kit
   extend T::Sig

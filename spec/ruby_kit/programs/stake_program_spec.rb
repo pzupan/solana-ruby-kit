@@ -22,7 +22,7 @@ RSpec.describe RubyKit::Programs::StakeProgram do
   # ---------------------------------------------------------------------------
   describe 'PROGRAM_ID' do
     it 'is the canonical stake program address' do
-      expect(described_class::PROGRAM_ID.value).to eq('Stake11111111111111111111111111111111111111111')
+      expect(described_class::PROGRAM_ID.value).to eq('Stake11111111111111111111111111111111111111')
     end
   end
 
@@ -108,7 +108,7 @@ RSpec.describe RubyKit::Programs::StakeProgram do
         owner_bytes = fields&.fetch(3)
         # Base58.decode may return more bytes than 32 for this address, so normalize
         # both sides through the same a32 pack/truncate that the implementation uses.
-        raw = RubyKit::Encoding::Base58.decode('Stake11111111111111111111111111111111111111111')
+        raw = RubyKit::Encoding::Base58.decode('Stake11111111111111111111111111111111111111')
         expected_bytes = [raw].pack('a32').b
         expect(owner_bytes).to eq(expected_bytes)
       end
@@ -121,7 +121,7 @@ RSpec.describe RubyKit::Programs::StakeProgram do
       subject(:ix) { instructions[1] }
 
       it 'targets the Stake Program' do
-        expect(ix.program_address.value).to eq('Stake11111111111111111111111111111111111111111')
+        expect(ix.program_address.value).to eq('Stake11111111111111111111111111111111111111')
       end
 
       it 'has exactly 2 accounts' do
@@ -199,7 +199,7 @@ RSpec.describe RubyKit::Programs::StakeProgram do
     end
 
     it 'targets the Stake Program' do
-      expect(ix.program_address.value).to eq('Stake11111111111111111111111111111111111111111')
+      expect(ix.program_address.value).to eq('Stake11111111111111111111111111111111111111')
     end
 
     it 'has exactly 6 accounts' do

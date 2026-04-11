@@ -116,6 +116,10 @@ module Solana::Ruby::Kit
     INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN               = :SOLANA_ERROR__INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN
     INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN   = :SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN
 
+    # ── Wallet Standard ───────────────────────────────────────────────────────
+    WALLET_STANDARD__INVALID_WIRE_FORMAT             = :SOLANA_ERROR__WALLET_STANDARD__INVALID_WIRE_FORMAT
+    WALLET_STANDARD__SIGNATURE_VERIFICATION_FAILED   = :SOLANA_ERROR__WALLET_STANDARD__SIGNATURE_VERIFICATION_FAILED
+
     # ── Invariant violations (internal) ──────────────────────────────────────
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE
@@ -226,6 +230,10 @@ module Solana::Ruby::Kit
         INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE    => 'Message packer is already complete; no more instructions to pack',
         INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN             => 'Instruction plan is empty and produced no transaction messages',
         INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN => 'Failed to execute transaction plan',
+
+        # Wallet Standard
+        WALLET_STANDARD__INVALID_WIRE_FORMAT           => 'Invalid transaction wire format: %{reason}',
+        WALLET_STANDARD__SIGNATURE_VERIFICATION_FAILED => 'Signature verification failed for signer %{address}',
 
         # Invariant violations
         INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING => 'Subscription iterator state is missing (internal error)',
