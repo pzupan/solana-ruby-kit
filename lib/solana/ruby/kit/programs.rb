@@ -5,6 +5,7 @@
 # returned in Solana transaction failures.
 require_relative 'programs/associated_token_account'
 require_relative 'programs/system_program'
+require_relative 'programs/stake_program'
 #
 # A program error in a transaction result looks like:
 #   { "InstructionError" => [0, { "Custom" => 1234 }] }

@@ -224,6 +224,117 @@ signature = rpc.send_transaction(wire_base64, skip_preflight: false)
 puts "Transaction signature: #{signature}"
 ```
 
+## Stake SOL with a validator
+
+A complete example that creates a new stake account, funds it, and delegates it to a validator — all in two transactions. The first transaction allocates and initialises the account; the second delegates it once the first has confirmed.
+
+```ruby
+require 'base64'
+require 'solana/ruby/kit'
+
+Kit   = Solana::Ruby::Kit
+Stake = Kit::Programs::StakeProgram
+TxMsg = Kit::TransactionMessages
+Txns  = Kit::Transactions
+
+rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
+
+# ── 1. Signers ────────────────────────────────────────────────────────────────
+# Your funding wallet — pays rent and signs as the fee payer.
+owner = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
+
+# A fresh keypair for the stake account itself (must sign the createAccount ix).
+stake_keypair = Kit::Signers.generate_key_pair_signer
+
+# The validator you want to delegate to (look this up via get_vote_accounts).
+vote_address = Kit::Addresses.address('VALIDATOR_VOTE_ADDRESS_HERE')
+
+# ── 2. How many lamports to stake? ────────────────────────────────────────────
+# The account must be rent-exempt (200 bytes) plus however much you want to stake.
+rent_exempt = rpc.get_minimum_balance_for_rent_exemption(Stake::STAKE_ACCOUNT_SPACE)
+stake_amount = 500_000_000    # 0.5 SOL on top of rent exemption
+lamports = rent_exempt + stake_amount
+
+# ── 3. Build the first transaction: create + initialise the stake account ──────
+create_ixs = Stake.create_account_instructions(
+  from:          owner.address,
+  stake_account: stake_keypair.address,
+  authorized:    owner.address,   # owner is both staker and withdrawer
+  lamports:      lamports
+)
+
+bh = rpc.get_latest_blockhash
+constraint = TxMsg::BlockhashLifetimeConstraint.new(
+  blockhash:               bh.value.blockhash,
+  last_valid_block_height: bh.value.last_valid_block_height
+)
+
+create_msg = Kit::Functional.pipe(
+  TxMsg.create_transaction_message(version: :legacy),
+  ->(tx) { TxMsg.set_fee_payer(owner.address, tx) },
+  ->(tx) { TxMsg.set_blockhash_lifetime(constraint, tx) },
+  ->(tx) { TxMsg.append_instructions(tx, create_ixs) }
+)
+
+create_tx = Txns.compile_transaction_message(create_msg)
+
+# Both owner and stake_keypair must sign: owner funds the account,
+# stake_keypair authorises the createAccount on its own address.
+create_signed = Txns.sign_transaction(
+  [owner.key_pair.signing_key, stake_keypair.key_pair.signing_key],
+  create_tx
+)
+
+create_sig = rpc.send_transaction(
+  Base64.strict_encode64(Txns.wire_encode_transaction(create_signed))
+)
+puts "Create stake account: #{create_sig}"
+
+Kit::TransactionConfirmation.wait_for_confirmation(
+  rpc, create_sig,
+  commitment:   :confirmed,
+  timeout_secs: 60
+)
+puts "Stake account confirmed."
+
+# ── 4. Build the second transaction: delegate to a validator ──────────────────
+delegate_ix = Stake.delegate_instruction(
+  stake_account: stake_keypair.address,
+  vote_account:  vote_address,
+  authorized:    owner.address    # must sign as the authorised staker
+)
+
+bh = rpc.get_latest_blockhash
+delegate_constraint = TxMsg::BlockhashLifetimeConstraint.new(
+  blockhash:               bh.value.blockhash,
+  last_valid_block_height: bh.value.last_valid_block_height
+)
+
+delegate_msg = Kit::Functional.pipe(
+  TxMsg.create_transaction_message(version: :legacy),
+  ->(tx) { TxMsg.set_fee_payer(owner.address, tx) },
+  ->(tx) { TxMsg.set_blockhash_lifetime(delegate_constraint, tx) },
+  ->(tx) { TxMsg.append_instructions(tx, [delegate_ix]) }
+)
+
+delegate_tx     = Txns.compile_transaction_message(delegate_msg)
+delegate_signed = Txns.sign_transaction([owner.key_pair.signing_key], delegate_tx)
+
+delegate_sig = rpc.send_transaction(
+  Base64.strict_encode64(Txns.wire_encode_transaction(delegate_signed))
+)
+puts "Delegate stake: #{delegate_sig}"
+
+Kit::TransactionConfirmation.wait_for_confirmation(
+  rpc, delegate_sig,
+  commitment:   :confirmed,
+  timeout_secs: 60
+)
+puts "Delegation confirmed. Stake account: #{stake_keypair.address}"
+```
+
+> **Note** Stake activation takes one full epoch (roughly 2–3 days on mainnet). The account will show status `activating` until then.
+
 ## Rails
 
 The gem includes a Railtie that auto-configures when Rails is present. Add it to your `Gemfile` as usual, then run the install generator:
@@ -593,6 +704,35 @@ Programs = Solana::Ruby::Kit::Programs
 Programs.program_error?(err)                   # => true / false
 Programs.program_error?(err, expected_code: 1) # match a specific code
 Programs.get_program_error_code(err)           # => Integer or nil
+```
+
+#### `Programs::StakeProgram`
+
+Create and delegate stake accounts.
+
+```ruby
+Stake = Solana::Ruby::Kit::Programs::StakeProgram
+
+# Well-known addresses
+Stake::PROGRAM_ID       # Stake11111111111111111111111111111111111111111
+Stake::STAKE_CONFIG_ID  # StakeConfig11111111111111111111111111111111
+Stake::STAKE_ACCOUNT_SPACE  # => 200 (bytes required for a stake account)
+
+# Build two instructions that allocate and initialise a new stake account.
+# The caller appends both to a transaction message.
+create_ixs = Stake.create_account_instructions(
+  from:          fee_payer_address,   # funding wallet (writable, signer)
+  stake_account: stake_keypair.address, # new stake account address (writable, signer)
+  authorized:    owner_address,       # becomes both staker and withdrawer
+  lamports:      2_282_880            # enough for rent + some stake
+)
+
+# Build one instruction that delegates an initialised stake account.
+delegate_ix = Stake.delegate_instruction(
+  stake_account: stake_keypair.address,
+  vote_account:  validator_vote_address,
+  authorized:    owner_address         # must sign the transaction
+)
 ```
 
 #### `Programs::AssociatedTokenAccount`
