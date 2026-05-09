@@ -273,6 +273,87 @@ RSpec.describe RubyKit::Rpc::Client do
   # ---------------------------------------------------------------------------
   # ClusterUrl convenience constructors
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # get_block_time
+  # ---------------------------------------------------------------------------
+  describe '#get_block_time' do
+    it 'returns the block production time as a Unix timestamp' do
+      stub_rpc('getBlockTime', result: 1_700_000_000)
+
+      ts = client.get_block_time(200_000_000)
+      expect(ts).to eq(1_700_000_000)
+    end
+
+    it 'returns nil when the block time is not available' do
+      stub_rpc('getBlockTime', result: nil)
+
+      expect(client.get_block_time(0)).to be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # get_epoch_schedule
+  # ---------------------------------------------------------------------------
+  describe '#get_epoch_schedule' do
+    it 'returns an EpochSchedule struct with all fields' do
+      stub_rpc('getEpochSchedule', result: {
+        'firstNormalEpoch'          => 14,
+        'firstNormalSlot'           => 524_256,
+        'leaderScheduleSlotOffset'  => 432_000,
+        'slotsPerEpoch'             => 432_000,
+        'warmup'                    => true
+      })
+
+      sched = client.get_epoch_schedule
+      expect(sched.first_normal_epoch).to           eq(14)
+      expect(sched.first_normal_slot).to            eq(524_256)
+      expect(sched.leader_schedule_slot_offset).to  eq(432_000)
+      expect(sched.slots_per_epoch).to              eq(432_000)
+      expect(sched.warmup).to                       eq(true)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # get_inflation_reward
+  # ---------------------------------------------------------------------------
+  describe '#get_inflation_reward' do
+    let(:address) { 'Vote111111111111111111111111111111111111111' }
+
+    it 'returns an array of InflationReward structs' do
+      stub_rpc('getInflationReward', result: [{
+        'amount'        => 2_500,
+        'commission'    => 10,
+        'effectiveSlot' => 432_000,
+        'epoch'         => 2,
+        'postBalance'   => 1_000_002_500
+      }])
+
+      rewards = client.get_inflation_reward([address])
+      expect(rewards.size).to eq(1)
+
+      r = rewards.first
+      expect(r.amount).to          eq(2_500)
+      expect(r.commission).to      eq(10)
+      expect(r.effective_slot).to  eq(432_000)
+      expect(r.epoch).to           eq(2)
+      expect(r.post_balance).to    eq(1_000_002_500)
+    end
+
+    it 'returns nil entries for addresses with no reward' do
+      stub_rpc('getInflationReward', result: [nil])
+
+      rewards = client.get_inflation_reward([address])
+      expect(rewards).to eq([nil])
+    end
+
+    it 'accepts commitment, epoch, and min_context_slot options' do
+      stub_rpc('getInflationReward', result: [nil])
+      expect {
+        client.get_inflation_reward([address], commitment: :finalized, epoch: 5, min_context_slot: 100)
+      }.not_to raise_error
+    end
+  end
+
   describe 'ClusterUrl convenience constructors' do
     it 'creates a devnet client from RubyKit::RpcTypes.devnet' do
       cluster = RubyKit::RpcTypes.devnet

@@ -20,6 +20,9 @@ require_relative 'api/get_token_accounts_by_owner'
 require_relative 'api/get_epoch_info'
 require_relative 'api/get_vote_accounts'
 require_relative 'api/simulate_transaction'
+require_relative 'api/get_block_time'
+require_relative 'api/get_epoch_schedule'
+require_relative 'api/get_inflation_reward'
 
 module Solana::Ruby::Kit
   module Rpc
@@ -56,6 +59,9 @@ module Solana::Ruby::Kit
       include Api::GetEpochInfo
       include Api::GetVoteAccounts
       include Api::SimulateTransaction
+      include Api::GetBlockTime
+      include Api::GetEpochSchedule
+      include Api::GetInflationReward
 
       sig { returns(Transport) }
       attr_reader :transport

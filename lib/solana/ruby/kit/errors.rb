@@ -120,6 +120,12 @@ module Solana::Ruby::Kit
     WALLET_STANDARD__INVALID_WIRE_FORMAT             = :SOLANA_ERROR__WALLET_STANDARD__INVALID_WIRE_FORMAT
     WALLET_STANDARD__SIGNATURE_VERIFICATION_FAILED   = :SOLANA_ERROR__WALLET_STANDARD__SIGNATURE_VERIFICATION_FAILED
 
+    # ── Subscribable ──────────────────────────────────────────────────────────
+    SUBSCRIBABLE__RETRY_NOT_SUPPORTED                     = :SOLANA_ERROR__SUBSCRIBABLE__RETRY_NOT_SUPPORTED
+
+    # ── Fixed-points ──────────────────────────────────────────────────────────
+    FIXED_POINTS__STRICT_MODE_PRECISION_LOSS              = :SOLANA_ERROR__FIXED_POINTS__STRICT_MODE_PRECISION_LOSS
+
     # ── Invariant violations (internal) ──────────────────────────────────────
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE
@@ -230,6 +236,12 @@ module Solana::Ruby::Kit
         INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE    => 'Message packer is already complete; no more instructions to pack',
         INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN             => 'Instruction plan is empty and produced no transaction messages',
         INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN => 'Failed to execute transaction plan',
+
+        # Subscribable
+        SUBSCRIBABLE__RETRY_NOT_SUPPORTED              => 'This reactive store does not support retry(); use create_reactive_store_from_data_publisher_factory for a retryable store',
+
+        # Fixed-points
+        FIXED_POINTS__STRICT_MODE_PRECISION_LOSS       => 'Value has more than 9 fractional digits and cannot be represented exactly as a Sol amount',
 
         # Wallet Standard
         WALLET_STANDARD__INVALID_WIRE_FORMAT           => 'Invalid transaction wire format: %{reason}',
