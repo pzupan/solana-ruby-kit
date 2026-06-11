@@ -481,6 +481,14 @@ msg = TxMsg.set_blockhash_lifetime(constraint, msg)
 msg = TxMsg.append_instructions(msg, [instruction])
 msg = TxMsg.prepend_instructions(msg, [priority_fee_ix])
 
+# Compute unit limit (SetComputeUnitLimit instruction from the Compute Budget program)
+msg = TxMsg.set_transaction_message_compute_unit_limit(200_000, msg)
+TxMsg.get_transaction_message_compute_unit_limit(msg)  # => 200_000
+
+# Loaded accounts data size limit
+msg = TxMsg.set_transaction_message_loaded_accounts_data_size_limit(64_000, msg)
+TxMsg.get_transaction_message_loaded_accounts_data_size_limit(msg)  # => 64_000
+
 # Durable nonce lifetime
 nonce_constraint = TxMsg::DurableNonceLifetimeConstraint.new(
   nonce:                 'abc...',
@@ -554,6 +562,10 @@ rpc.get_transaction(signature, encoding: 'base64')
 rpc.get_token_account_balance(token_account)
 rpc.get_token_accounts_by_owner(owner, mint: mint_address)
 rpc.get_epoch_info
+rpc.get_epoch_schedule
+rpc.get_block_time(slot)
+rpc.get_inflation_reward([address])
+rpc.get_signatures_for_address(address)
 rpc.get_vote_accounts
 rpc.simulate_transaction(encoded_tx)
 rpc.send_transaction(encoded_tx)
@@ -567,7 +579,7 @@ rescue Solana::Ruby::Kit::Rpc::RpcError => e
   puts e.code     # JSON-RPC error code
   puts e.message  # JSON-RPC error message
 rescue Solana::Ruby::Kit::Rpc::HttpTransportError => e
-  puts e.status   # HTTP status code
+  puts e.status_code  # HTTP status code
 ```
 
 ### `Solana::Ruby::Kit::RpcTypes` — `@solana/rpc-types`
@@ -683,12 +695,12 @@ Sysvars::Addresses::RENT_ADDRESS
 Sysvars::Addresses::EPOCH_SCHEDULE_ADDRESS
 
 # Fetch and decode via an RPC client
-clock = Sysvars.fetch_clock(rpc)
+clock = Sysvars.fetch_sysvar_clock(rpc)
 clock.slot              # => Integer
 clock.epoch             # => Integer
 clock.unix_timestamp    # => Integer
 
-rent = Sysvars.fetch_rent(rpc)
+rent = Sysvars.fetch_sysvar_rent(rpc)
 rent.lamports_per_byte_year  # => Integer
 rent.exemption_threshold     # => Float
 ```
@@ -781,6 +793,30 @@ sig     = signer.sign(encoded)
 decoded = OffChain.decode_message(encoded)
 ```
 
+### `Solana::Ruby::Kit::ResourceLimitEstimation` — `@solana/kit`
+
+Estimate and set compute unit limits and loaded accounts data size limits by simulating
+the transaction before sending.
+
+```ruby
+RLE = Solana::Ruby::Kit::ResourceLimitEstimation
+
+# 1. Fill provisory (0) limits as placeholders during message construction.
+#    This reserves space in the transaction for the limit instructions so the
+#    size estimate used by compile_transaction_message is accurate.
+msg = RLE.fill_transaction_message_provisory_resource_limits(msg)
+
+# 2. After construction, estimate actual resource usage via simulation and
+#    stamp the real values onto the message.
+estimator = RLE.estimate_resource_limits_factory(rpc: rpc)
+# estimate returns { compute_unit_limit: Integer, loaded_accounts_data_size_limit?: Integer }
+estimate = estimator.call(msg)
+
+# 3. Or combine steps 2 + set in one call.
+setter  = RLE.estimate_and_set_resource_limits_factory(estimator)
+msg     = setter.call(msg)
+```
+
 ### `Solana::Ruby::Kit::TransactionConfirmation` — `@solana/transaction-confirmation`
 
 Poll for transaction confirmation with timeout.
@@ -788,11 +824,11 @@ Poll for transaction confirmation with timeout.
 ```ruby
 Confirm = Solana::Ruby::Kit::TransactionConfirmation
 
-Confirm.confirm_transaction(
-  rpc:        rpc,
-  signature:  sig,
-  commitment: :confirmed,
-  timeout:    60
+Confirm.wait_for_confirmation(
+  rpc,
+  sig,
+  commitment:   :confirmed,
+  timeout_secs: 60
 )
 ```
 

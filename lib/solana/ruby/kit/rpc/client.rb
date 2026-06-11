@@ -23,6 +23,7 @@ require_relative 'api/simulate_transaction'
 require_relative 'api/get_block_time'
 require_relative 'api/get_epoch_schedule'
 require_relative 'api/get_inflation_reward'
+require_relative 'api/get_signatures_for_address'
 
 module Solana::Ruby::Kit
   module Rpc
@@ -62,6 +63,7 @@ module Solana::Ruby::Kit
       include Api::GetBlockTime
       include Api::GetEpochSchedule
       include Api::GetInflationReward
+      include Api::GetSignaturesForAddress
 
       sig { returns(Transport) }
       attr_reader :transport

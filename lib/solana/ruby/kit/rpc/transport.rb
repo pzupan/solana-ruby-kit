@@ -117,10 +117,9 @@ module Solana::Ruby::Kit
         http.open_timeout = @open_timeout
 
         req = Net::HTTP::Post.new(T.cast(@uri, URI::HTTP).request_uri)
-        req['Content-Type']   = 'application/json; charset=utf-8'
-        req['Accept']         = 'application/json'
-        req['Content-Length'] = body.bytesize.to_s
-        req['solana-client']  = 'ruby-kit'
+        req['Content-Type']  = 'application/json; charset=utf-8'
+        req['Accept']        = 'application/json'
+        req['solana-client'] = 'ruby-kit'
         @headers.each { |k, v| req[k] = v }
         req.body = body
 

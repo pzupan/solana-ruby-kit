@@ -354,6 +354,75 @@ RSpec.describe RubyKit::Rpc::Client do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # get_signatures_for_address
+  # ---------------------------------------------------------------------------
+  describe '#get_signatures_for_address' do
+    let(:address) { 'Vote111111111111111111111111111111111111111' }
+    let(:sig)     { '5KtPn3DXXzHkb7VAVHZGwXJQqww39ASnkLqcZ5einu8D' }
+
+    it 'returns an array of SignatureInfo structs' do
+      stub_rpc('getSignaturesForAddress', result: [
+        {
+          'blockTime'          => 1_700_000_000,
+          'confirmationStatus' => 'finalized',
+          'err'                => nil,
+          'memo'               => nil,
+          'signature'          => sig,
+          'slot'               => 100
+        }
+      ])
+
+      results = client.get_signatures_for_address(address)
+      expect(results).to be_an(Array)
+      expect(results.size).to eq(1)
+
+      info = results.first
+      expect(info).to be_a(RubyKit::Rpc::Api::SignatureInfo)
+      expect(info.signature).to           eq(sig)
+      expect(info.slot).to                eq(100)
+      expect(info.block_time).to          eq(1_700_000_000)
+      expect(info.confirmation_status).to eq(:finalized)
+      expect(info.err).to                 be_nil
+      expect(info.memo).to                be_nil
+      expect(info.transaction_index).to   be_nil
+    end
+
+    it 'exposes transactionIndex when the RPC returns it (Agave 4.0+)' do
+      stub_rpc('getSignaturesForAddress', result: [
+        {
+          'blockTime'         => nil,
+          'confirmationStatus' => 'confirmed',
+          'err'               => nil,
+          'memo'              => nil,
+          'signature'         => sig,
+          'slot'              => 200,
+          'transactionIndex'  => 3
+        }
+      ])
+
+      info = client.get_signatures_for_address(address).first
+      expect(info.transaction_index).to eq(3)
+    end
+
+    it 'accepts optional filter keyword arguments' do
+      stub_rpc('getSignaturesForAddress', result: [])
+      expect do
+        client.get_signatures_for_address(
+          address,
+          limit:            10,
+          commitment:       :finalized,
+          min_context_slot: 50
+        )
+      end.not_to raise_error
+    end
+
+    it 'returns an empty array when no signatures exist' do
+      stub_rpc('getSignaturesForAddress', result: [])
+      expect(client.get_signatures_for_address(address)).to eq([])
+    end
+  end
+
   describe 'ClusterUrl convenience constructors' do
     it 'creates a devnet client from RubyKit::RpcTypes.devnet' do
       cluster = RubyKit::RpcTypes.devnet

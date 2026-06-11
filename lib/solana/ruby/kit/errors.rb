@@ -46,6 +46,10 @@ module Solana::Ruby::Kit
 
     # ── Transactions ──────────────────────────────────────────────────────────
     TRANSACTIONS__TRANSACTION_NOT_SIGNABLE               = :SOLANA_ERROR__TRANSACTIONS__TRANSACTION_NOT_SIGNABLE
+    TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT        = :SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT
+    TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT = :SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT
+    TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = :SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT
+    TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS = :SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS
     TRANSACTIONS__EXCEEDS_SIZE_LIMIT                     = :SOLANA_ERROR__TRANSACTION__EXCEEDS_SIZE_LIMIT
     TRANSACTIONS__MISSING_SIGNER                         = :SOLANA_ERROR__TRANSACTIONS__MISSING_SIGNER
     TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE            = :SOLANA_ERROR__TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE
@@ -88,13 +92,12 @@ module Solana::Ruby::Kit
     RPC__INTEGER_OVERFLOW_WHILE_SERIALIZING_LARGE_INTEGER = :SOLANA_ERROR__RPC__INTEGER_OVERFLOW_WHILE_SERIALIZING_LARGE_INTEGER
     RPC__INTEGER_OVERFLOW_WHILE_DESERIALIZING_LARGE_INTEGER = :SOLANA_ERROR__RPC__INTEGER_OVERFLOW_WHILE_DESERIALIZING_LARGE_INTEGER
     RPC__TRANSPORT_HTTP_ERROR                             = :SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR
-    # JSON-RPC server errors (-32017..-32019); context keys mirror TypeScript SolanaErrorContext:
-    #   EPOCH_REWARDS_PERIOD_ACTIVE: { slot:, current_block_height:, rewards_complete_block_height: }
-    #   SLOT_NOT_EPOCH_BOUNDARY:     { slot: }
-    #   LONG_TERM_STORAGE_UNREACHABLE: (no context)
+    # JSON-RPC server errors (see https://github.com/anza-xyz/kit/blob/main/packages/errors/src/codes.ts)
     JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE    = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE
     JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY        = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY
     JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE  = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE
+    JSON_RPC__SERVER_ERROR_NO_SLOT_HISTORY                = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SLOT_HISTORY
+    JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND   = :SOLANA_ERROR__JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND
     RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST
     RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID   = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID
     RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED = :SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED
@@ -172,6 +175,10 @@ module Solana::Ruby::Kit
 
         # Transactions
         TRANSACTIONS__TRANSACTION_NOT_SIGNABLE           => 'Transaction is not signable (missing fee payer or lifetime constraint)',
+        TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT    => 'Failed to estimate the compute unit consumption for this transaction message. This is likely because simulating the transaction failed.',
+        TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT => 'Transaction failed when it was simulated in order to estimate the compute unit consumption.',
+        TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT => 'Failed to estimate the loaded accounts data size for this transaction message. The RPC did not return a loadedAccountsDataSize value from simulation. This value is required for version 1 transactions.',
+        TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS => 'Transaction failed when it was simulated in order to estimate its resource limits.',
         TRANSACTIONS__EXCEEDS_SIZE_LIMIT                 => 'Transaction wire size (%{actual_size} bytes) exceeds the limit of %{limit} bytes',
         TRANSACTIONS__MISSING_SIGNER                     => 'Transaction is missing a required signer: %{address}',
         TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE        => 'Transaction version %{version} is out of range',
@@ -217,6 +224,8 @@ module Solana::Ruby::Kit
         JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE      => 'Epoch rewards period still active at slot %{slot}',
         JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY          => "Rewards cannot be found because slot %{slot} is not the epoch boundary. This may be due to gap in the queried node's local ledger or long-term storage",
         JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE    => 'Failed to query long-term storage; please try again',
+        JSON_RPC__SERVER_ERROR_NO_SLOT_HISTORY                  => 'No slot history',
+        JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND     => 'Filter transaction not found',
         RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_REQUEST  => 'Cannot create subscription request',
         RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID     => 'Expected server to return a subscription ID',
         RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED => 'WebSocket channel closed before message could be buffered',
