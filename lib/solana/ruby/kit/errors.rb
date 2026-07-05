@@ -56,6 +56,10 @@ module Solana::Ruby::Kit
     TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS = :SOLANA_ERROR__TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS
     TRANSACTIONS__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING = :SOLANA_ERROR__TRANSACTIONS__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING
     TRANSACTIONS__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND = :SOLANA_ERROR__TRANSACTIONS__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND
+    # context: { index: }
+    TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE = :SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE
+    # context: { unsupported_version: }
+    TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED            = :SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED
     TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE     = :SOLANA_ERROR__TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE
     TRANSACTIONS__BLOCKHASH_NOT_FOUND                    = :SOLANA_ERROR__TRANSACTIONS__BLOCKHASH_NOT_FOUND
     TRANSACTIONS__FAILED_TRANSACTION_PLAN                = :SOLANA_ERROR__TRANSACTIONS__FAILED_TRANSACTION_PLAN
@@ -118,6 +122,16 @@ module Solana::Ruby::Kit
     INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE      = :SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE
     INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN               = :SOLANA_ERROR__INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN
     INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN   = :SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN
+    # context: { max_instructions:, transaction_instruction_limit: }
+    INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION = :SOLANA_ERROR__INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION
+    # context: { max_instructions:, num_instructions: }
+    INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED = :SOLANA_ERROR__INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED
+
+    # ── Transaction introspection ────────────────────────────────────────────
+    TRANSACTION_INTROSPECTION__CANNOT_DECODE_JSON_PARSED_TRANSACTION = :SOLANA_ERROR__TRANSACTION_INTROSPECTION__CANNOT_DECODE_JSON_PARSED_TRANSACTION
+    TRANSACTION_INTROSPECTION__UNRECOGNIZED_GET_TRANSACTION_RESPONSE = :SOLANA_ERROR__TRANSACTION_INTROSPECTION__UNRECOGNIZED_GET_TRANSACTION_RESPONSE
+    # context: { needed_bytes: }
+    TRANSACTION_INTROSPECTION__MALFORMED_COMPILED_MESSAGE = :SOLANA_ERROR__TRANSACTION_INTROSPECTION__MALFORMED_COMPILED_MESSAGE
 
     # ── Wallet Standard ───────────────────────────────────────────────────────
     WALLET_STANDARD__INVALID_WIRE_FORMAT             = :SOLANA_ERROR__WALLET_STANDARD__INVALID_WIRE_FORMAT
@@ -184,7 +198,9 @@ module Solana::Ruby::Kit
         TRANSACTIONS__VERSION_NUMBER_OUT_OF_RANGE        => 'Transaction version %{version} is out of range',
         TRANSACTIONS__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS => 'Failed to decompile address lookup table contents',
         TRANSACTIONS__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING => 'Failed to decompile transaction: fee payer is missing',
-        TRANSACTIONS__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND => 'Failed to decompile instruction: program address not found',
+        TRANSACTIONS__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND => 'Failed to decompile instruction: program address not found at index %{index}',
+        TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE => 'Failed to decompile instruction: account index %{index} is out of range',
+        TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED        => 'Transaction version %{unsupported_version} is not supported',
         TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE => 'Transaction simulation failed: %{message}',
         TRANSACTIONS__BLOCKHASH_NOT_FOUND                => 'Blockhash not found',
         TRANSACTIONS__FAILED_TRANSACTION_PLAN            => 'Failed to execute transaction plan',
@@ -245,6 +261,13 @@ module Solana::Ruby::Kit
         INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE    => 'Message packer is already complete; no more instructions to pack',
         INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN             => 'Instruction plan is empty and produced no transaction messages',
         INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN => 'Failed to execute transaction plan',
+        INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION => 'The configured maximum of %{max_instructions} instructions per transaction is invalid. It must be a positive integer no greater than the transaction format limit of %{transaction_instruction_limit} instructions per transaction.',
+        INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED => 'Planning this transaction message would require %{num_instructions} instructions, which exceeds the configured maximum of %{max_instructions} instructions per transaction.',
+
+        # Transaction introspection
+        TRANSACTION_INTROSPECTION__CANNOT_DECODE_JSON_PARSED_TRANSACTION => "Cannot decode a 'jsonParsed'-encoded getTransaction response; its instructions are pre-parsed and lack raw bytes. Fetch with encoding: 'json' or 'base64' instead.",
+        TRANSACTION_INTROSPECTION__UNRECOGNIZED_GET_TRANSACTION_RESPONSE => 'Unrecognized getTransaction response shape; expected a base64, base58, or json-encoded transaction.',
+        TRANSACTION_INTROSPECTION__MALFORMED_COMPILED_MESSAGE => 'Malformed compiled transaction message: expected at least %{needed_bytes} byte(s)',
 
         # Subscribable
         SUBSCRIBABLE__RETRY_NOT_SUPPORTED              => 'This reactive store does not support retry(); use create_reactive_store_from_data_publisher_factory for a retryable store',

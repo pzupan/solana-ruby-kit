@@ -5,6 +5,7 @@ require_relative '../errors'
 require_relative '../instructions/instruction'
 require_relative '../transaction_messages/transaction_message'
 require_relative '../transactions/compiler'
+require_relative 'max_instructions'
 
 module Solana::Ruby::Kit
   module InstructionPlans
@@ -68,9 +69,17 @@ module Solana::Ruby::Kit
       # Packs as many instructions as possible into +message+ and returns the
       # updated message. Raises SolanaError if the message is too small or the
       # packer is already done.
-      sig { params(message: TransactionMessages::TransactionMessage).returns(TransactionMessages::TransactionMessage) }
-      def pack_message_to_capacity(message)
-        @pack_proc.call(message)
+      #
+      # +max_instructions+ caps the number of top-level instructions allowed in the
+      # returned message (defaults to 16; must be a positive integer no greater than 64).
+      sig do
+        params(
+          message:          TransactionMessages::TransactionMessage,
+          max_instructions: T.nilable(Integer)
+        ).returns(TransactionMessages::TransactionMessage)
+      end
+      def pack_message_to_capacity(message, max_instructions: nil)
+        @pack_proc.call(message, max_instructions)
       end
     end
 
@@ -122,10 +131,14 @@ module Solana::Ruby::Kit
           offset = T.let(0, Integer)
           MessagePacker.new(
             done_proc: -> { offset >= total_length },
-            pack_proc:  ->(message) {
+            pack_proc:  ->(message, max_instructions) {
               if offset >= total_length
                 Kernel.raise SolanaError.new(SolanaError::INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE)
               end
+
+              InstructionPlans.assert_valid_max_instructions_per_transaction(max_instructions)
+              resolved_max = InstructionPlans.resolve_max_instructions(max_instructions)
+              InstructionPlans.assert_max_instructions_per_transaction(message.instructions.length + 1, resolved_max)
 
               base_ix    = get_instruction.call(offset, 0)
               with_base  = TransactionMessages.append_instructions(message, [base_ix])
@@ -164,18 +177,30 @@ module Solana::Ruby::Kit
           idx = T.let(0, Integer)
           MessagePacker.new(
             done_proc: -> { idx >= instructions.length },
-            pack_proc:  ->(message) {
+            pack_proc:  ->(message, max_instructions) {
               if idx >= instructions.length
                 Kernel.raise SolanaError.new(SolanaError::INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE)
               end
+
+              InstructionPlans.assert_valid_max_instructions_per_transaction(max_instructions)
+              resolved_max = InstructionPlans.resolve_max_instructions(max_instructions)
+              InstructionPlans.assert_max_instructions_per_transaction(message.instructions.length + 1, resolved_max)
 
               original_size = Transactions.get_transaction_message_size(message)
               packed        = T.let(message, TransactionMessages::TransactionMessage)
               start_idx     = idx
 
               (idx...instructions.length).each do |i|
-                packed = TransactionMessages.append_instructions(packed, [instructions[i]])
-                size   = Transactions.get_transaction_message_size(packed)
+                # Stop once the message is full, before compiling a message that would exceed
+                # the instruction limit (which would raise). The assertion above guarantees at
+                # least the first instruction fits, so reaching the limit here is a graceful stop.
+                if packed.instructions.length >= resolved_max
+                  idx = i
+                  return packed
+                end
+
+                next_packed = TransactionMessages.append_instructions(packed, [instructions[i]])
+                size        = Transactions.get_transaction_message_size(next_packed)
 
                 if size > Transactions::TRANSACTION_SIZE_LIMIT
                   if i == start_idx
@@ -190,6 +215,8 @@ module Solana::Ruby::Kit
                   idx = i
                   return packed
                 end
+
+                packed = next_packed
               end
 
               idx = instructions.length

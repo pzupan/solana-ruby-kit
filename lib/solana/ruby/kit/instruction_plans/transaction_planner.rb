@@ -23,27 +23,45 @@ module Solana::Ruby::Kit
     #     Called after instructions are appended to a message. Must return the
     #     (possibly further updated) message. Defaults to identity.
     #
-    # The returned planner is a lambda: planner.call(instruction_plan) -> TransactionPlan
+    #   max_instructions_per_transaction: Integer  (optional)
+    #     Maximum number of top-level instructions allowed in each planned transaction.
+    #     Must be a positive integer no greater than 64. Defaults to 16. Can be overridden
+    #     per-call via the returned planner's `max_instructions_per_transaction:` kwarg.
+    #
+    # The returned planner is a lambda:
+    #   planner.call(instruction_plan, max_instructions_per_transaction: nil) -> TransactionPlan
     #
     # Mirrors `createTransactionPlanner(config)` from @solana/instruction-plans.
     # NOTE: Ruby translation is synchronous; abort-signal support is omitted.
     sig do
       params(
-        create_transaction_message:     T.untyped,
-        on_transaction_message_updated: T.untyped
+        create_transaction_message:        T.untyped,
+        on_transaction_message_updated:    T.untyped,
+        max_instructions_per_transaction:  T.nilable(Integer)
       ).returns(T.untyped)
     end
     def create_transaction_planner(
       create_transaction_message:,
-      on_transaction_message_updated: ->(msg) { msg }
+      on_transaction_message_updated: ->(msg) { msg },
+      max_instructions_per_transaction: nil
     )
       ctx = {
         create_transaction_message:     create_transaction_message,
         on_transaction_message_updated: on_transaction_message_updated
       }
+      config_max_instructions_per_transaction = max_instructions_per_transaction
 
-      ->(instruction_plan) {
-        mutable = planner_traverse(instruction_plan, ctx.merge(parent: nil, parent_candidates: []))
+      ->(instruction_plan, max_instructions_per_transaction: nil) {
+        resolved_max = max_instructions_per_transaction || config_max_instructions_per_transaction
+
+        # Reject up front any configured maximum the transaction format could never satisfy,
+        # rather than discovering it mid-plan when a message fails to compile.
+        InstructionPlans.assert_valid_max_instructions_per_transaction(resolved_max)
+
+        mutable = planner_traverse(
+          instruction_plan,
+          ctx.merge(parent: nil, parent_candidates: [], max_instructions_per_transaction: resolved_max)
+        )
         Kernel.raise SolanaError.new(SolanaError::INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN) unless mutable
         planner_freeze(mutable)
       }
@@ -136,7 +154,7 @@ module Solana::Ruby::Kit
       candidates = ctx[:parent_candidates].dup
 
       until packer.done?
-        predicate = ->(msg) { packer.pack_message_to_capacity(msg) }
+        predicate = ->(msg) { packer.pack_message_to_capacity(msg, max_instructions: ctx[:max_instructions_per_transaction]) }
         candidate = planner_select_and_mutate_candidate(ctx, candidates, &predicate)
         unless candidate
           msg      = planner_create_new_message(ctx, &predicate)
@@ -162,11 +180,18 @@ module Solana::Ruby::Kit
         begin
           updated = ctx[:on_transaction_message_updated].call(predicate.call(candidate[:message]))
           if Transactions.get_transaction_message_size(updated) <= Transactions::TRANSACTION_SIZE_LIMIT
+            InstructionPlans.assert_max_instructions_per_transaction(
+              updated.instructions.length,
+              InstructionPlans.resolve_max_instructions(ctx[:max_instructions_per_transaction])
+            )
             candidate[:message] = updated
             return candidate
           end
         rescue SolanaError => e
-          next if e.code == SolanaError::INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN
+          next if [
+            SolanaError::INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN,
+            SolanaError::INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED
+          ].include?(e.code)
           Kernel.raise
         end
       end
@@ -187,6 +212,11 @@ module Solana::Ruby::Kit
         )
       end
 
+      InstructionPlans.assert_max_instructions_per_transaction(
+        updated_msg.instructions.length,
+        InstructionPlans.resolve_max_instructions(ctx[:max_instructions_per_transaction])
+      )
+
       updated_msg
     end
 
@@ -205,11 +235,21 @@ module Solana::Ruby::Kit
               num_free_bytes:     Transactions::TRANSACTION_SIZE_LIMIT - base_size }
           )
         end
+        InstructionPlans.assert_max_instructions_per_transaction(
+          updated.instructions.length,
+          InstructionPlans.resolve_max_instructions(ctx[:max_instructions_per_transaction])
+        )
         updated
       when :message_packer
         packer = plan.get_message_packer.call
         msg    = message
-        msg    = packer.pack_message_to_capacity(msg) until packer.done?
+        until packer.done?
+          msg = packer.pack_message_to_capacity(msg, max_instructions: ctx[:max_instructions_per_transaction])
+          InstructionPlans.assert_max_instructions_per_transaction(
+            msg.instructions.length,
+            InstructionPlans.resolve_max_instructions(ctx[:max_instructions_per_transaction])
+          )
+        end
         msg
       else
         Kernel.raise SolanaError.new(

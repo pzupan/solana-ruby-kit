@@ -2,7 +2,7 @@
 
 A Ruby port of [@anza-xyz/kit](https://github.com/anza-xyz/kit) — the official Solana TypeScript SDK — translated into idiomatic Ruby with [Sorbet](https://sorbet.org) static types.
 
-Every module maps 1-to-1 to a TypeScript package. All methods are synchronous (Ruby's RbNaCl is synchronous; TypeScript's Web Crypto API is not).
+Every module maps 1-to-1 to a TypeScript package. All methods are synchronous (Ruby's RbNaCl is synchronous; TypeScript's Web Crypto API is not).  This port now tracks the anza-xyz/kit version.
 
 ## Requirements
 
@@ -28,312 +28,19 @@ gem 'solana-ruby-kit'
 bundle install
 ```
 
-## Quick start
-
-```ruby
-require 'solana/ruby/kit'
-
-Kit = Solana::Ruby::Kit
-
-# Generate a signer
-signer = Kit::Signers.generate_key_pair_signer
-puts signer.address   # => base58 public key
-
-# Connect to devnet
-rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
-puts rpc.get_slot     # => 123456789
-
-# Build and send a transaction
-blockhash_resp = rpc.get_latest_blockhash
-constraint = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
-  blockhash:               blockhash_resp.value.blockhash,
-  last_valid_block_height: blockhash_resp.value.last_valid_block_height
-)
-
-msg = Kit::Functional.pipe(
-  Kit::TransactionMessages.create_transaction_message(version: 0),
-  ->(tx) { Kit::TransactionMessages.set_fee_payer(signer.address, tx) },
-  ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, tx) }
-)
-```
-
-## Create a wallet
-
-Generating a keypair creates the wallet **locally**. The wallet only exists **on-chain** once it receives SOL — Solana allocates account storage at that point. On devnet you can fund it with an airdrop; on mainnet someone must send SOL to the address.
-
-```ruby
-require 'solana/ruby/kit'
-
-Kit = Solana::Ruby::Kit
-
-# ── 1. Generate the keypair (local only, not yet on-chain) ────────────────────
-
-signer = Kit::Signers.generate_key_pair_signer
-puts "Address: #{signer.address}"
-
-# ── 2. Save to disk ───────────────────────────────────────────────────────────
-# Standard format: 64 raw bytes = 32-byte private seed || 32-byte public key.
-# Compatible with `solana-keygen new` and Phantom's export format.
-
-kp        = signer.key_pair
-raw_bytes = kp.signing_key.to_bytes + kp.verify_key.to_bytes
-File.binwrite('wallet.bin', raw_bytes)
-
-# ── 3. Fund the wallet on-chain (devnet / testnet only) ───────────────────────
-# request_airdrop is the System Program creating the account and crediting SOL.
-# On mainnet, skip this and have another wallet send SOL to signer.address instead.
-
-rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
-
-airdrop_sig = rpc.request_airdrop(signer.address.to_s, 1_000_000_000) # 1 SOL in lamports
-puts "Airdrop signature: #{airdrop_sig}"
-
-# ── 4. Wait for the airdrop transaction to confirm ────────────────────────────
-
-Kit::TransactionConfirmation.wait_for_confirmation(
-  rpc,
-  airdrop_sig,
-  commitment:   :confirmed,
-  timeout_secs: 30
-)
-puts "Confirmed."
-
-# ── 5. Verify the account exists on-chain ─────────────────────────────────────
-
-balance = rpc.get_balance(signer.address)
-puts "Balance: #{balance.value / 1_000_000_000.0} SOL"   # => "1.0 SOL"
-
-# ── Load from disk later ──────────────────────────────────────────────────────
-
-loaded = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
-puts loaded.address  # same address
-```
-
-## Transfer SOL from one wallet to another
-
-```ruby
-require 'base64'
-require 'solana/ruby/kit'
-
-Kit = Solana::Ruby::Kit
-
-# ── 1. Load your sender keypair ───────────────────────────────────────────────────
-sender = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
-
-recipient = Kit::Addresses.address('RECIPIENT_ADDRESS_HERE')
-
-# ── 2. Build the transfer instruction (0.5 SOL) ───────────────────────────────────
-ix = Kit::Programs::SystemProgram.transfer_instruction(
-  sender:    sender.address,
-  recipient: recipient,
-  lamports:  500_000_000
-)
-
-# ── 2. Fetch blockhash, build message, compile, sign, send ───────────────────────────────────
-rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
-bh  = rpc.get_latest_blockhash
-
-message = Kit::Functional.pipe(
-  Kit::TransactionMessages.create_transaction_message(version: :legacy),
-  ->(tx) { Kit::TransactionMessages.set_fee_payer(sender.address, tx) },
-  ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(
-    Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
-      blockhash: bh.value.blockhash, last_valid_block_height: bh.value.last_valid_block_height
-    ), tx) },
-  ->(tx) { Kit::TransactionMessages.append_instructions(tx, [ix]) }
-)
-
-transaction = Kit::Transactions.compile_transaction_message(message)
-signed      = Kit::Transactions.sign_transaction([sender.key_pair.signing_key], transaction)
-wire_base64 = Base64.strict_encode64(Kit::Transactions.wire_encode_transaction(signed))
-
-sig = rpc.send_transaction(wire_base64)
-puts "Signature: #{sig}"
-```
-
-## Create an Associated Token Account
-
-A complete example showing how to create an SPL token account for a wallet. The ATA address is deterministic — derived from the wallet + mint — so no extra keypair is needed.
-
-```ruby
-require 'base64'
-require 'solana/ruby/kit'
-
-Kit = Solana::Ruby::Kit
-
-# ── 1. Signer and addresses ───────────────────────────────────────────────────
-
-# Load your payer from 64 raw bytes (seed || public key).
-# Replace File.binread with however you store your keypair.
-payer = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
-
-mint = Kit::Addresses.address('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') # USDC
-
-# ── 2. Build the instruction ──────────────────────────────────────────────────
-# create_instruction derives the ATA address internally. Passing idempotent: true
-# means the transaction succeeds even if the ATA already exists.
-
-ix = Kit::Programs::AssociatedTokenAccount.create_instruction(
-  payer:      payer.address,
-  wallet:     payer.address,
-  mint:       mint,
-  idempotent: true
-)
-
-# The derived ATA address is the second account in the instruction.
-puts "ATA address : #{ix.accounts[1].address}"
-
-# ── 3. Fetch a recent blockhash ───────────────────────────────────────────────
-
-rpc = Kit::Rpc::Client.new(Kit::RpcTypes.mainnet)
-
-bh = rpc.get_latest_blockhash
-constraint = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
-  blockhash:               bh.value.blockhash,
-  last_valid_block_height: bh.value.last_valid_block_height
-)
-
-# ── 4. Build the transaction message ─────────────────────────────────────────
-
-message = Kit::Functional.pipe(
-  Kit::TransactionMessages.create_transaction_message(version: :legacy),
-  ->(tx) { Kit::TransactionMessages.set_fee_payer(payer.address, tx) },
-  ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, tx) },
-  ->(tx) { Kit::TransactionMessages.append_instructions(tx, [ix]) }
-)
-
-# ── 5. Compile → sign → encode → send ────────────────────────────────────────
-
-# compile_transaction_message serialises the message into Solana's on-wire
-# format and reserves a nil signature slot for every required signer.
-transaction = Kit::Transactions.compile_transaction_message(message)
-
-# sign_transaction fills every slot and raises if any signer is missing.
-signed = Kit::Transactions.sign_transaction(
-  [payer.key_pair.signing_key],
-  transaction
-)
-
-# wire_encode_transaction prepends the compact-u16 signature count + raw
-# 64-byte signatures to the message bytes — the full payload for sendTransaction.
-wire_base64 = Base64.strict_encode64(
-  Kit::Transactions.wire_encode_transaction(signed)
-)
-
-signature = rpc.send_transaction(wire_base64, skip_preflight: false)
-puts "Transaction signature: #{signature}"
-```
-
-## Stake SOL with a validator
-
-A complete example that creates a new stake account, funds it, and delegates it to a validator — all in two transactions. The first transaction allocates and initialises the account; the second delegates it once the first has confirmed.
-
-```ruby
-require 'base64'
-require 'solana/ruby/kit'
-
-Kit   = Solana::Ruby::Kit
-Stake = Kit::Programs::StakeProgram
-TxMsg = Kit::TransactionMessages
-Txns  = Kit::Transactions
-
-rpc = Kit::Rpc::Client.new(Kit::RpcTypes.devnet)
-
-# ── 1. Signers ────────────────────────────────────────────────────────────────
-# Your funding wallet — pays rent and signs as the fee payer.
-owner = Kit::Signers.create_key_pair_signer_from_bytes(File.binread('wallet.bin'))
-
-# A fresh keypair for the stake account itself (must sign the createAccount ix).
-stake_keypair = Kit::Signers.generate_key_pair_signer
-
-# The validator you want to delegate to (look this up via get_vote_accounts).
-vote_address = Kit::Addresses.address('VALIDATOR_VOTE_ADDRESS_HERE')
-
-# ── 2. How many lamports to stake? ────────────────────────────────────────────
-# The account must be rent-exempt (200 bytes) plus however much you want to stake.
-rent_exempt = rpc.get_minimum_balance_for_rent_exemption(Stake::STAKE_ACCOUNT_SPACE)
-stake_amount = 500_000_000    # 0.5 SOL on top of rent exemption
-lamports = rent_exempt + stake_amount
-
-# ── 3. Build the first transaction: create + initialise the stake account ──────
-create_ixs = Stake.create_account_instructions(
-  from:          owner.address,
-  stake_account: stake_keypair.address,
-  authorized:    owner.address,   # owner is both staker and withdrawer
-  lamports:      lamports
-)
-
-bh = rpc.get_latest_blockhash
-constraint = TxMsg::BlockhashLifetimeConstraint.new(
-  blockhash:               bh.value.blockhash,
-  last_valid_block_height: bh.value.last_valid_block_height
-)
-
-create_msg = Kit::Functional.pipe(
-  TxMsg.create_transaction_message(version: :legacy),
-  ->(tx) { TxMsg.set_fee_payer(owner.address, tx) },
-  ->(tx) { TxMsg.set_blockhash_lifetime(constraint, tx) },
-  ->(tx) { TxMsg.append_instructions(tx, create_ixs) }
-)
-
-create_tx = Txns.compile_transaction_message(create_msg)
-
-# Both owner and stake_keypair must sign: owner funds the account,
-# stake_keypair authorises the createAccount on its own address.
-create_signed = Txns.sign_transaction(
-  [owner.key_pair.signing_key, stake_keypair.key_pair.signing_key],
-  create_tx
-)
-
-create_sig = rpc.send_transaction(
-  Base64.strict_encode64(Txns.wire_encode_transaction(create_signed))
-)
-puts "Create stake account: #{create_sig}"
-
-Kit::TransactionConfirmation.wait_for_confirmation(
-  rpc, create_sig,
-  commitment:   :confirmed,
-  timeout_secs: 60
-)
-puts "Stake account confirmed."
-
-# ── 4. Build the second transaction: delegate to a validator ──────────────────
-delegate_ix = Stake.delegate_instruction(
-  stake_account: stake_keypair.address,
-  vote_account:  vote_address,
-  authorized:    owner.address    # must sign as the authorised staker
-)
-
-bh = rpc.get_latest_blockhash
-delegate_constraint = TxMsg::BlockhashLifetimeConstraint.new(
-  blockhash:               bh.value.blockhash,
-  last_valid_block_height: bh.value.last_valid_block_height
-)
-
-delegate_msg = Kit::Functional.pipe(
-  TxMsg.create_transaction_message(version: :legacy),
-  ->(tx) { TxMsg.set_fee_payer(owner.address, tx) },
-  ->(tx) { TxMsg.set_blockhash_lifetime(delegate_constraint, tx) },
-  ->(tx) { TxMsg.append_instructions(tx, [delegate_ix]) }
-)
-
-delegate_tx     = Txns.compile_transaction_message(delegate_msg)
-delegate_signed = Txns.sign_transaction([owner.key_pair.signing_key], delegate_tx)
-
-delegate_sig = rpc.send_transaction(
-  Base64.strict_encode64(Txns.wire_encode_transaction(delegate_signed))
-)
-puts "Delegate stake: #{delegate_sig}"
-
-Kit::TransactionConfirmation.wait_for_confirmation(
-  rpc, delegate_sig,
-  commitment:   :confirmed,
-  timeout_secs: 60
-)
-puts "Delegation confirmed. Stake account: #{stake_keypair.address}"
-```
-
-> **Note** Stake activation takes one full epoch (roughly 2–3 days on mainnet). The account will show status `activating` until then.
+## Examples
+
+Full worked examples live on the [wiki](https://github.com/pzupan/solana-ruby-kit/wiki):
+
+- [Quick Start](https://github.com/pzupan/solana-ruby-kit/wiki/Quick-Start)
+- [Create a Wallet](https://github.com/pzupan/solana-ruby-kit/wiki/Create-a-Wallet)
+- [Transfer SOL](https://github.com/pzupan/solana-ruby-kit/wiki/Transfer-SOL)
+- [Create an Associated Token Account](https://github.com/pzupan/solana-ruby-kit/wiki/Create-an-Associated-Token-Account)
+- [Stake SOL with a Validator](https://github.com/pzupan/solana-ruby-kit/wiki/Stake-SOL-with-a-Validator)
+- [Verify a Wallet-Signed Transaction in Rails](https://github.com/pzupan/solana-ruby-kit/wiki/Verify-a-Wallet-Signed-Transaction-in-Rails)
+- [Build a Transaction for Browser Signing](https://github.com/pzupan/solana-ruby-kit/wiki/Build-a-Transaction-for-Browser-Signing)
+
+The sections below cover configuration and the per-module API reference.
 
 ## Rails
 
@@ -851,6 +558,11 @@ plan = Plans.sequential_instruction_plan([ix1, ix2, ix3])
 # ── 2. Create a planner ───────────────────────────────────────────────────────
 # create_transaction_message is called whenever a new (empty) transaction is
 # needed. It must return a message with a fee payer and blockhash already set.
+#
+# max_instructions_per_transaction caps how many top-level instructions the
+# planner packs into a single message. Must be a positive integer no greater
+# than 64 (the transaction format's hard limit); defaults to 16, leaving
+# headroom for inner (CPI) instructions the planner can't see ahead of time.
 planner = Plans.create_transaction_planner(
   create_transaction_message: -> {
     Kit::Functional.pipe(
@@ -858,11 +570,13 @@ planner = Plans.create_transaction_planner(
       ->(tx) { Kit::TransactionMessages.set_fee_payer(signer.address, tx) },
       ->(tx) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, tx) }
     )
-  }
+  },
+  max_instructions_per_transaction: 12  # optional; omit for the default of 16
 )
 
 # plan! distributes instructions across as few transactions as possible.
-transaction_plan = planner.call(plan)
+# The cap can also be overridden per call:
+transaction_plan = planner.call(plan, max_instructions_per_transaction: 8)
 
 # ── 3. Create an executor and run it ─────────────────────────────────────────
 # execute_transaction_message receives each fully-packed TransactionMessage and
@@ -903,78 +617,7 @@ transaction and returns wire bytes; Rails decodes those bytes and verifies every
 signature without broadcasting — because Solana addresses **are** Ed25519 public keys, no
 additional key lookup is required.
 
-#### Verify a wallet-signed transaction in a Rails controller
-
-```ruby
-# app/controllers/payments_controller.rb
-require 'base64'
-
-WS = Solana::Ruby::Kit::WalletStandard
-TX = Solana::Ruby::Kit::Transactions
-
-class PaymentsController < ApplicationController
-  # POST /payments/verify
-  # Body: { signed_transaction: "<base64 wire bytes from wallet>" }
-  def verify
-    wire_bytes = Base64.strict_decode64(params[:signed_transaction])
-
-    # 1. Decode the wallet output and verify every present signature.
-    #    Raises WalletStandard::SIGNATURE_VERIFICATION_FAILED on any mismatch.
-    tx = WS.verify_signed_transaction!(wire_bytes)
-
-    # 2. Assert all required signers have signed (no nil slots remain).
-    TX.assert_fully_signed_transaction!(tx)
-
-    # 3. Confirm the expected wallet address actually signed.
-    wallet_address = Solana::Ruby::Kit::Addresses::Address.new(params[:wallet_address])
-    render json: { error: 'wrong signer' }, status: :unprocessable_entity and return \
-      unless WS.signed_by?(tx, wallet_address)
-
-    # 4. Optionally broadcast through your own RPC node instead of the browser.
-    rpc      = Solana::Ruby::Kit.rpc_client
-    wire_b64 = Base64.strict_encode64(TX.wire_encode_transaction(tx))
-    sig      = rpc.send_transaction(wire_b64, encoding: 'base64')
-
-    render json: { signature: sig.value }
-  rescue Solana::Ruby::Kit::SolanaError => e
-    render json: { error: e.message, code: e.code }, status: :unprocessable_entity
-  end
-end
-```
-
-#### Build the transaction server-side, send to the browser for signing, then verify
-
-```ruby
-Kit = Solana::Ruby::Kit
-WS  = Kit::WalletStandard
-
-# ── Server: build and serialise the unsigned transaction ─────────────────────
-fee_payer   = Kit::Addresses::Address.new(params[:wallet_address])
-rpc         = Kit.rpc_client
-latest      = rpc.get_latest_blockhash
-constraint  = Kit::TransactionMessages::BlockhashLifetimeConstraint.new(
-  blockhash:               latest['blockhash'],
-  last_valid_block_height: latest['lastValidBlockHeight']
-)
-
-message = Kit::Functional.pipe(
-  Kit::TransactionMessages.create_transaction_message(version: :legacy),
-  ->(m) { Kit::TransactionMessages.set_fee_payer(fee_payer, m) },
-  ->(m) { Kit::TransactionMessages.set_blockhash_lifetime(constraint, m) }
-)
-
-compiled        = Kit::Transactions.compile_transaction_message(message)
-unsigned_wire   = Kit::Transactions.wire_encode_transaction(compiled)
-unsigned_base64 = Base64.strict_encode64(unsigned_wire)
-
-# → send unsigned_base64 to the browser
-# → browser calls: wallet.features['solana:signTransaction'].signTransaction(tx)
-# → browser POSTs { signed_transaction: "<base64>" } back to /payments/verify
-
-# ── Server: receive and verify the signed transaction ────────────────────────
-tx = WS.verify_signed_transaction!(Base64.strict_decode64(params[:signed_transaction]))
-Kit::Transactions.assert_fully_signed_transaction!(tx)
-```
+Full worked examples: [Verify a Wallet-Signed Transaction in Rails](https://github.com/pzupan/solana-ruby-kit/wiki/Verify-a-Wallet-Signed-Transaction-in-Rails) and [Build a Transaction for Browser Signing](https://github.com/pzupan/solana-ruby-kit/wiki/Build-a-Transaction-for-Browser-Signing).
 
 #### Wallet Standard feature constants
 
@@ -988,6 +631,54 @@ WS::SIGN_AND_SEND_TRANSACTION # => 'solana:signAndSendTransaction'
 WS::SIGN_MESSAGE              # => 'solana:signMessage'
 WS::CONNECT                   # => 'standard:connect'
 ```
+
+### `Solana::Ruby::Kit::TransactionIntrospection` — `@solana/transaction-introspection`
+
+Decode a confirmed `getTransaction` response and walk its outer and inner (CPI)
+instructions — useful for indexers, explorers, or auditing what a transaction
+actually did on-chain.
+
+```ruby
+TI  = Solana::Ruby::Kit::TransactionIntrospection
+rpc = Solana::Ruby::Kit.rpc_client
+
+rpc_tx = rpc.get_transaction(
+  signature,
+  encoding:                           'base64',
+  max_supported_transaction_version: 0
+)
+
+# Decodes 'base64', 'base58', or 'json' getTransaction responses.
+# `transaction` is only present for 'base64'/'base58' (a re-encodable
+# Transactions::Transaction); 'json' responses carry no wire bytes to round-trip.
+decoded = TI.decode_transaction_from_rpc_response(rpc_tx)
+
+# Outer instructions only, with account indices resolved to full AccountMetas.
+outer = TI.get_instructions_from_compiled_transaction_message(
+  decoded.compiled_message,
+  decoded.loaded_addresses
+)
+
+# Every instruction — outer and inner (CPI) — in the order an explorer
+# displays them, each tagged with a `trace` describing its position.
+instructions = TI.walk_instructions(
+  compiled_message: decoded.compiled_message,
+  loaded_addresses: decoded.loaded_addresses,
+  meta:             rpc_tx['meta']
+)
+
+instructions.each do |traced|
+  ix = traced.instruction
+  puts "#{traced.trace[:kind]} ix -> #{ix.program_address}"
+end
+```
+
+> **Note** `'jsonParsed'` responses are not supported — their instructions are
+> pre-parsed by the server and lack raw bytes, so they can't be resolved here;
+> fetch with `'json'` or `'base64'` instead. Wire-format (`'base64'`/`'base58'`)
+> decoding only handles legacy and v0 transactions — Ruby's transaction compiler
+> doesn't produce v1 transactions yet either, so there is nothing to decompile
+> for that version.
 
 ## Error handling
 

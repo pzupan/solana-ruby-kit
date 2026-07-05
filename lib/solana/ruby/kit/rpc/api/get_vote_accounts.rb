@@ -12,6 +12,7 @@ module Solana::Ruby::Kit
           :activated_stake,
           :epoch_vote_account,
           :commission,
+          :inflation_rewards_commission_bps,
           :last_vote,
           :epoch_credits,
           :root_slot,
@@ -45,6 +46,7 @@ module Solana::Ruby::Kit
               activated_stake:    Kernel.Integer(v['activatedStake']),
               epoch_vote_account: v['epochVoteAccount'],
               commission:         Kernel.Integer(v['commission']),
+              inflation_rewards_commission_bps: v['inflationRewardsCommissionBps'] ? Kernel.Integer(v['inflationRewardsCommissionBps']) : nil,
               last_vote:          Kernel.Integer(v['lastVote']),
               epoch_credits:      v['epochCredits'],
               root_slot:          v['rootSlot'] ? Kernel.Integer(v['rootSlot']) : nil

@@ -51,6 +51,7 @@ require_relative 'kit/sysvars'
 require_relative 'kit/transaction_confirmation'
 require_relative 'kit/instruction_plans'
 require_relative 'kit/resource_limit_estimation'
+require_relative 'kit/transaction_introspection'
 
 # Solana::Ruby::Kit is a Ruby translation of @anza-xyz/kit — the JavaScript SDK for
 # building Solana apps — into idiomatic Ruby with Sorbet static types.
@@ -80,6 +81,7 @@ require_relative 'kit/resource_limit_estimation'
 #   Solana::Ruby::Kit::TransactionConfirmation — confirmation polling   (@solana/transaction-confirmation)
 #   Solana::Ruby::Kit::InstructionPlans      — multi-tx planning        (@solana/instruction-plans)
 #   Solana::Ruby::Kit::WalletStandard        — server-side sig verify   (@solana/wallet-standard)
+#   Solana::Ruby::Kit::TransactionIntrospection — decode/walk instructions (@solana/transaction-introspection)
 
 module Solana::Ruby::Kit
   extend T::Sig
