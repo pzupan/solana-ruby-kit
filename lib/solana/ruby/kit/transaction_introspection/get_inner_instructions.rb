@@ -12,7 +12,7 @@ module Solana::Ruby::Kit
 
     module_function
 
-    # Returns the inner instructions in a `getTransaction` response as
+    # Returns the inner instructions in a transaction `meta` as
     # TracedInstructions.
     #
     # The RPC returns inner instructions in a different shape from the wire
@@ -21,8 +21,10 @@ module Solana::Ruby::Kit
     # data, resolves the indices against the supplied AccountMeta list, and
     # tags each instruction with an `inner` trace.
     #
-    # +meta+ is the raw (String-keyed) `meta` hash from a `getTransaction`
-    # response. Returns an empty array if it carries no `innerInstructions`.
+    # +meta+ is the raw (String-keyed) `meta` hash from any method that returns
+    # transaction metadata without `jsonParsed` encoding — `getTransaction`,
+    # `getTransactionsForAddress`, or `getBlock`. Returns an empty array if it
+    # carries no `innerInstructions`.
     #
     # Raises if any `programIdIndex` or account index falls outside the
     # supplied `account_metas` list.

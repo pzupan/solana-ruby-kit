@@ -139,6 +139,7 @@ module Solana::Ruby::Kit
 
     # ── Subscribable ──────────────────────────────────────────────────────────
     SUBSCRIBABLE__RETRY_NOT_SUPPORTED                     = :SOLANA_ERROR__SUBSCRIBABLE__RETRY_NOT_SUPPORTED
+    SUBSCRIBABLE__STREAM_CLOSED_WITHOUT_ERROR             = :SOLANA_ERROR__SUBSCRIBABLE__STREAM_CLOSED_WITHOUT_ERROR
 
     # ── Fixed-points ──────────────────────────────────────────────────────────
     FIXED_POINTS__STRICT_MODE_PRECISION_LOSS              = :SOLANA_ERROR__FIXED_POINTS__STRICT_MODE_PRECISION_LOSS
@@ -271,6 +272,7 @@ module Solana::Ruby::Kit
 
         # Subscribable
         SUBSCRIBABLE__RETRY_NOT_SUPPORTED              => 'This reactive store does not support retry(); use create_reactive_store_from_data_publisher_factory for a retryable store',
+        SUBSCRIBABLE__STREAM_CLOSED_WITHOUT_ERROR      => 'The stream store closed in an error state but did not report an error.',
 
         # Fixed-points
         FIXED_POINTS__STRICT_MODE_PRECISION_LOSS       => 'Value has more than 9 fractional digits and cannot be represented exactly as a Sol amount',

@@ -85,6 +85,68 @@ RSpec.describe RubyKit::TransactionIntrospection do
       expect(decoded.compiled_message.instructions.first.data).to eq("\x01\x02\x03".b)
     end
 
+    # A getTransactionsForAddress / getBlock element carries the same
+    # transaction/meta/version envelope as a getTransaction response, plus
+    # slot/blockTime/transactionIndex. The decoder reads only the envelope.
+    it 'decodes a getTransactionsForAddress-shaped result, ignoring the extra fields' do
+      rpc_tx = {
+        'blockTime'        => 1_700_000_000,
+        'meta'             => { 'loadedAddresses' => { 'readonly' => [], 'writable' => [] } },
+        'slot'             => 100,
+        'transaction'      => [Base64.strict_encode64(wire_bytes), 'base64'],
+        'transactionIndex' => 3
+      }
+
+      decoded = described_class.decode_transaction_from_rpc_response(rpc_tx)
+
+      expect(decoded.compiled_message.version).to eq(:legacy)
+      expect(decoded.transaction).not_to be_nil
+    end
+
+    it 'treats an explicitly null version as legacy on the json path' do
+      rpc_tx = {
+        'transaction' => {
+          'message' => {
+            'header' => {
+              'numRequiredSignatures' => 1,
+              'numReadonlySignedAccounts' => 0,
+              'numReadonlyUnsignedAccounts' => 1
+            },
+            'accountKeys'     => [fee_payer.value, writable_account.value, program_address.value],
+            'recentBlockhash' => blockhash_constraint.blockhash,
+            'instructions'    => []
+          }
+        },
+        'meta'    => nil,
+        'version' => nil
+      }
+
+      expect(described_class.decode_transaction_from_rpc_response(rpc_tx).compiled_message.version)
+        .to eq(:legacy)
+    end
+
+    it 'preserves a v0 version on the json path' do
+      rpc_tx = {
+        'transaction' => {
+          'message' => {
+            'header' => {
+              'numRequiredSignatures' => 1,
+              'numReadonlySignedAccounts' => 0,
+              'numReadonlyUnsignedAccounts' => 1
+            },
+            'accountKeys'     => [fee_payer.value, writable_account.value, program_address.value],
+            'recentBlockhash' => blockhash_constraint.blockhash,
+            'instructions'    => []
+          }
+        },
+        'meta'    => nil,
+        'version' => 0
+      }
+
+      expect(described_class.decode_transaction_from_rpc_response(rpc_tx).compiled_message.version)
+        .to eq(0)
+    end
+
     it 'raises for a jsonParsed response' do
       rpc_tx = {
         'transaction' => {

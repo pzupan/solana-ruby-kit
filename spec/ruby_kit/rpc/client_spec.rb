@@ -346,6 +346,25 @@ RSpec.describe RubyKit::Rpc::Client do
       expect(rewards).to eq([nil])
     end
 
+    # Vote accounts that report commission through getVoteAccounts'
+    # inflationRewardsCommissionBps get a null commission here.
+    it 'parses an entry whose commission is null' do
+      stub_rpc('getInflationReward', result: [{
+        'amount'        => 0,
+        'commission'    => nil,
+        'effectiveSlot' => 436_320_000,
+        'epoch'         => 1_009,
+        'postBalance'   => 445_971_718
+      }])
+
+      r = client.get_inflation_reward([address]).first
+      expect(r.commission).to     be_nil
+      expect(r.amount).to         eq(0)
+      expect(r.effective_slot).to eq(436_320_000)
+      expect(r.epoch).to          eq(1_009)
+      expect(r.post_balance).to   eq(445_971_718)
+    end
+
     it 'accepts commitment, epoch, and min_context_slot options' do
       stub_rpc('getInflationReward', result: [nil])
       expect {
@@ -420,6 +439,127 @@ RSpec.describe RubyKit::Rpc::Client do
     it 'returns an empty array when no signatures exist' do
       stub_rpc('getSignaturesForAddress', result: [])
       expect(client.get_signatures_for_address(address)).to eq([])
+    end
+  end
+
+  describe '#get_transactions_for_address' do
+    let(:address) { 'Vote111111111111111111111111111111111111111' }
+
+    def last_config
+      body = JSON.parse(WebMock::RequestRegistry.instance.requested_signatures.hash.keys.last.body)
+      body['params'][1]
+    end
+
+    it 'parses a signatures page and its pagination token' do
+      stub_rpc('getTransactionsForAddress', result: {
+        'data' => [{
+          'blockTime'          => 1_700_000_000,
+          'confirmationStatus' => 'finalized',
+          'err'                => nil,
+          'memo'               => 'hello',
+          'signature'          => '5xY',
+          'slot'               => 436_320_000,
+          'transactionIndex'   => 3
+        }],
+        'paginationToken' => '436320000:4'
+      })
+
+      page = client.get_transactions_for_address(address)
+      expect(page.pagination_token).to eq('436320000:4')
+
+      entry = page.data.first
+      expect(entry.block_time).to          eq(1_700_000_000)
+      expect(entry.confirmation_status).to eq(:finalized)
+      expect(entry.err).to                 be_nil
+      expect(entry.memo).to                eq('hello')
+      expect(entry.signature).to           eq('5xY')
+      expect(entry.slot).to                eq(436_320_000)
+      expect(entry.transaction_index).to   eq(3)
+    end
+
+    it 'defaults to signatures details' do
+      stub_rpc('getTransactionsForAddress', result: { 'data' => [], 'paginationToken' => nil })
+      client.get_transactions_for_address(address)
+      expect(last_config['transactionDetails']).to eq('signatures')
+    end
+
+    it 'returns full results verbatim so they can be decoded by TransactionIntrospection' do
+      full = {
+        'blockTime'        => nil,
+        'meta'             => { 'loadedAddresses' => { 'readonly' => [], 'writable' => [] } },
+        'slot'             => 100,
+        'transaction'      => %w[AQID base64],
+        'transactionIndex' => 0,
+        'version'          => 0
+      }
+      stub_rpc('getTransactionsForAddress', result: { 'data' => [full], 'paginationToken' => nil })
+
+      page = client.get_transactions_for_address(
+        address, transaction_details: :full, encoding: 'base64', max_supported_transaction_version: 0
+      )
+      expect(page.data).to eq([full])
+      expect(page.pagination_token).to be_nil
+    end
+
+    it 'serializes filters, sort order, and pagination options into the wire config' do
+      stub_rpc('getTransactionsForAddress', result: { 'data' => [], 'paginationToken' => nil })
+
+      client.get_transactions_for_address(
+        address,
+        commitment:       :confirmed,
+        limit:            50,
+        min_context_slot: 400,
+        pagination_token: '100:2',
+        sort_order:       :asc,
+        filters:          {
+          block_time:     { gte: 1_700_000_000, lt: 1_800_000_000 },
+          slot:           { gt: 400 },
+          signature:      { lte: '5xY' },
+          status:         :succeeded,
+          token_accounts: :balance_changed
+        }
+      )
+
+      config = last_config
+      expect(config['commitment']).to      eq('confirmed')
+      expect(config['limit']).to           eq(50)
+      expect(config['minContextSlot']).to  eq(400)
+      expect(config['paginationToken']).to eq('100:2')
+      expect(config['sortOrder']).to       eq('asc')
+      expect(config['filters']).to eq(
+        'blockTime'     => { 'gte' => 1_700_000_000, 'lt' => 1_800_000_000 },
+        'slot'          => { 'gt' => 400 },
+        'signature'     => { 'lte' => '5xY' },
+        'status'        => 'succeeded',
+        'tokenAccounts' => 'balanceChanged'
+      )
+    end
+
+    it 'rejects the processed commitment, which this method does not support' do
+      expect { client.get_transactions_for_address(address, commitment: :processed) }
+        .to raise_error(ArgumentError, /processed/)
+    end
+
+    it 'rejects encoding without full transaction details' do
+      expect { client.get_transactions_for_address(address, encoding: 'base64') }
+        .to raise_error(ArgumentError, /only valid with transaction_details: :full/)
+    end
+
+    it 'rejects an unknown filter key' do
+      expect { client.get_transactions_for_address(address, filters: { nope: 1 }) }
+        .to raise_error(ArgumentError, /unknown filter/)
+    end
+
+    it 'rejects an unknown comparison operator' do
+      expect { client.get_transactions_for_address(address, filters: { slot: { between: 1 } }) }
+        .to raise_error(ArgumentError, /unknown comparison/)
+    end
+
+    it 'returns an empty page when nothing matches' do
+      stub_rpc('getTransactionsForAddress', result: { 'data' => [], 'paginationToken' => nil })
+      page = client.get_transactions_for_address(address)
+      expect(page.data).to eq([])
+      expect(page.pagination_token).to be_nil
     end
   end
 

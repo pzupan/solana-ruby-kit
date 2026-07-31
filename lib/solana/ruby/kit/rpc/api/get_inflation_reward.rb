@@ -9,7 +9,9 @@ module Solana::Ruby::Kit
       InflationReward = T.let(
         Struct.new(
           :amount,         # Integer (Lamports) — reward credited
-          :commission,     # Integer — vote account commission at reward time
+          :commission,     # Integer, nilable — vote account commission at reward time;
+                           #   null once the vote account reports commission through
+                           #   getVoteAccounts' inflationRewardsCommissionBps instead
           :effective_slot, # Integer — slot in which rewards were delivered
           :epoch,          # Integer — epoch for which reward occurred
           :post_balance,   # Integer (Lamports) — post-reward account balance
@@ -46,7 +48,7 @@ module Solana::Ruby::Kit
 
             InflationReward.new(
               amount:         Kernel.Integer(entry['amount']),
-              commission:     Kernel.Integer(entry['commission']),
+              commission:     entry['commission'] ? Kernel.Integer(entry['commission']) : nil,
               effective_slot: Kernel.Integer(entry['effectiveSlot']),
               epoch:          Kernel.Integer(entry['epoch']),
               post_balance:   Kernel.Integer(entry['postBalance'])

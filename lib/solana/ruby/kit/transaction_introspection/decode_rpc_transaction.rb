@@ -14,7 +14,7 @@ module Solana::Ruby::Kit
   module TransactionIntrospection
     extend T::Sig
 
-    # The result of decoding a `getTransaction` response: the
+    # The result of decoding a confirmed-transaction RPC response: the
     # CompiledTransactionMessage, the loaded ALT addresses pulled from `meta`
     # (if any), and — for `'base64'` and `'base58'` responses — the
     # re-encodable wire-format Transactions::Transaction.
@@ -33,14 +33,28 @@ module Solana::Ruby::Kit
 
     module_function
 
-    # Decodes a `getTransaction` response (any of `encoding: 'base64'`,
+    # Decodes a confirmed-transaction RPC response (any of `encoding: 'base64'`,
     # `'base58'`, or `'json'`) into a CompiledTransactionMessage plus, for
     # `'base64'` and `'base58'`, a re-encodable Transactions::Transaction.
     # The JSON path does not produce a Transaction: the server has already
     # decompiled the wire format, so there are no message bytes to carry.
     #
-    # +rpc_tx+ is the raw (String-keyed) JSON hash returned by
-    # `Rpc::Api::GetTransaction#get_transaction`.
+    # +rpc_tx+ is a raw (String-keyed) JSON hash. Only the `transaction` /
+    # `meta` / `version` envelope is read — not a method-specific response
+    # shape — so results from any method that returns confirmed transactions in
+    # these encodings work, and extra fields (`slot`, `blockTime`,
+    # `transactionIndex`, …) are ignored:
+    #
+    #   # getTransaction — a single response hash
+    #   rpc_tx = rpc.get_transaction(signature, encoding: 'base64')
+    #   TransactionIntrospection.decode_transaction_from_rpc_response(rpc_tx)
+    #
+    #   # getTransactionsForAddress — one hash per element of `data`
+    #   page = rpc.get_transactions_for_address(
+    #     address, transaction_details: :full, encoding: 'base64',
+    #     max_supported_transaction_version: 0
+    #   )
+    #   page.data.map { |tx| TransactionIntrospection.decode_transaction_from_rpc_response(tx) }
     #
     # `'jsonParsed'` is not supported — its instructions arrive pre-parsed by
     # the server and lack raw bytes, so they cannot be round-tripped. Passing
@@ -135,7 +149,10 @@ module Solana::Ruby::Kit
 
       # The envelope only carries `version` when `maxSupportedTransactionVersion`
       # was set on the request; otherwise the response is necessarily legacy.
-      version = rpc_tx.key?('version') ? rpc_tx['version'] : :legacy
+      # A `version` key that is present but null counts as absent — some methods
+      # include the key unconditionally. Ruby's `||` is safe here where
+      # TypeScript needs `??`: 0 (v0) is truthy in Ruby, so a real v0 survives.
+      version = rpc_tx['version'] || :legacy
       version = :legacy if version == 'legacy'
 
       compiled_message = CompiledTransactionMessage.new(
