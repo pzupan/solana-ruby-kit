@@ -26,7 +26,9 @@ Gem::Specification.new do |spec|
   # `rpc_types/sol.rb` requires bigdecimal, which stopped being a default gem
   # in Ruby 3.4. Without this the gem does not load at all on 3.4+; it went
   # unnoticed because webmock -> crack pulls bigdecimal into development.
-  spec.add_dependency 'bigdecimal', '>= 3.1'
+  # Bounded rather than `~> 3.1` because 4.x is current and the only API used
+  # here is the Kernel#BigDecimal conversion, unchanged across both majors.
+  spec.add_dependency 'bigdecimal', '>= 3.1', '< 5'
   spec.add_dependency 'openssl', '~> 3.3'
   # Sorbet does not follow semver — the patch component is a build number, and the
   # runtime must track the compiler's series — so these are bounded at the minor level.
