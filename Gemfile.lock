@@ -1,11 +1,11 @@
 PATH
   remote: .
   specs:
-    solana-ruby-kit (7.1.0)
+    solana-ruby-kit (7.1.1)
       openssl (~> 3.3)
-      rbnacl
-      sorbet-runtime
-      websocket-client-simple
+      rbnacl (~> 7.1)
+      sorbet-runtime (~> 0.6)
+      websocket-client-simple (~> 0.9)
 
 GEM
   remote: https://rubygems.org/
@@ -118,15 +118,15 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  drb
-  parser
-  rake
-  rspec
-  sexp_processor
+  drb (~> 2.2)
+  parser (~> 3.3)
+  rake (~> 13.0)
+  rspec (~> 3.13)
+  sexp_processor (~> 4.17)
   solana-ruby-kit!
-  sorbet
-  tapioca
-  webmock
+  sorbet (~> 0.6)
+  tapioca (~> 0.16)
+  webmock (~> 3.26)
 
 BUNDLED WITH
    2.6.8

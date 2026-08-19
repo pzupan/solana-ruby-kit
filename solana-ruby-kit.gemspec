@@ -7,23 +7,35 @@ Gem::Specification.new do |spec|
   spec.version               = Solana::Ruby::Kit::VERSION
   spec.authors               = ['Paul Zupan, Idhra Inc.']
   spec.summary               = 'Ruby port of the Anza TypeScript SDK (@anza-xyz/kit)'
+  spec.homepage              = 'https://github.com/pzupan/solana-ruby-kit'
   spec.license               = 'MIT'
   spec.required_ruby_version = '>= 3.2.0'
   spec.require_paths         = ['lib']
 
-  spec.files = Dir['lib/**/*.rb', 'lib/**/*.tt', 'solana-ruby-kit.gemspec']
+  # `homepage_uri` is omitted deliberately: `spec.homepage` already supplies it, and
+  # repeating the same URI under a second key makes rubygems.org drop the duplicate.
+  spec.metadata = {
+    'source_code_uri'   => "#{spec.homepage}/tree/main",
+    'documentation_uri' => "#{spec.homepage}/wiki",
+    'bug_tracker_uri'   => "#{spec.homepage}/issues"
+  }
+
+  spec.files = Dir['lib/**/*.rb', 'lib/**/*.tt'] + ['LICENSE', 'README.md', 'solana-ruby-kit.gemspec']
+  spec.extra_rdoc_files = ['LICENSE', 'README.md']
 
   spec.add_dependency 'openssl', '~> 3.3'
-  spec.add_dependency 'sorbet-runtime'
-  spec.add_dependency 'rbnacl'
-  spec.add_dependency 'websocket-client-simple'
+  # Sorbet does not follow semver — the patch component is a build number, and the
+  # runtime must track the compiler's series — so these are bounded at the minor level.
+  spec.add_dependency 'sorbet-runtime', '~> 0.6'
+  spec.add_dependency 'rbnacl', '~> 7.1'
+  spec.add_dependency 'websocket-client-simple', '~> 0.9'
 
-  spec.add_development_dependency 'sorbet'
-  spec.add_development_dependency 'drb'
-  spec.add_development_dependency 'sexp_processor'
-  spec.add_development_dependency 'parser'
-  spec.add_development_dependency 'tapioca'
-  spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'rspec'
-  spec.add_development_dependency 'webmock'
+  spec.add_development_dependency 'sorbet', '~> 0.6'
+  spec.add_development_dependency 'drb', '~> 2.2'
+  spec.add_development_dependency 'sexp_processor', '~> 4.17'
+  spec.add_development_dependency 'parser', '~> 3.3'
+  spec.add_development_dependency 'tapioca', '~> 0.16'
+  spec.add_development_dependency 'rake', '~> 13.0'
+  spec.add_development_dependency 'rspec', '~> 3.13'
+  spec.add_development_dependency 'webmock', '~> 3.26'
 end
