@@ -16,7 +16,9 @@ require_relative 'codecs/data_structures'
 
 module Solana::Ruby::Kit
   module Codecs
-    # Make number helpers directly available as Codecs.u8_codec etc.
+    # Makes the whole helper surface available as Codecs.u8_codec etc. This
+    # relies on each module using `extend self` rather than `module_function`
+    # - see the note in numbers.rb for why the distinction matters here.
     extend Numbers
     extend Strings
     extend DataStructures

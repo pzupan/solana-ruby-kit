@@ -9,7 +9,11 @@ module Solana::Ruby::Kit
     module Strings
       extend T::Sig
 
-      module_function
+      # `extend self`, not `module_function`: both expose these as module
+      # methods, but module_function also marks the instance methods PRIVATE,
+      # and `Codecs extend Strings` then inherits that privacy - which silently
+      # defeated the "directly available as Codecs.x" intent in codecs.rb.
+      extend self
 
       # UTF-8 string codec.
       # When +size+ is given the encoded bytes are fixed to that length

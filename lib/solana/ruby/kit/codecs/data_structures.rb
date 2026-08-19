@@ -7,7 +7,11 @@ module Solana::Ruby::Kit
     module DataStructures
       extend T::Sig
 
-      module_function
+      # `extend self`, not `module_function`: both expose these as module
+      # methods, but module_function also marks the instance methods PRIVATE,
+      # and `Codecs extend DataStructures` then inherits that privacy - which silently
+      # defeated the "directly available as Codecs.x" intent in codecs.rb.
+      extend self
 
       # Encode/decode a fixed ordered list of named fields.
       # +fields+ is an Array of [name, codec] pairs (name can be String or Symbol).

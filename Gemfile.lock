@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     solana-ruby-kit (7.1.1)
+      bigdecimal (>= 3.1)
       openssl (~> 3.3)
       rbnacl (~> 7.1)
       sorbet-runtime (~> 0.6)

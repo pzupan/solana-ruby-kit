@@ -13,7 +13,11 @@ module Solana::Ruby::Kit
     module Numbers
       extend T::Sig
 
-      module_function
+      # `extend self`, not `module_function`: both expose these as module
+      # methods, but module_function also marks the instance methods PRIVATE,
+      # and `Codecs extend Numbers` then inherits that privacy - which silently
+      # defeated the "directly available as Codecs.x" intent in codecs.rb.
+      extend self
 
       # ── Unsigned integers ────────────────────────────────────────────────────
 
