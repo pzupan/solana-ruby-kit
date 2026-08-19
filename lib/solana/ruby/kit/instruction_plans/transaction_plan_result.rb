@@ -13,23 +13,27 @@ module Solana::Ruby::Kit
     #
     # Each single transaction produces one of three statuses:
     #   successful: { kind: :successful, transaction:, context: }
-    #   failed:     { kind: :failed,     error: }
-    #   canceled:   { kind: :canceled }
+    #   failed:     { kind: :failed,     error:, context: }
+    #   canceled:   { kind: :canceled,   context: }
     #
-    # Mirrors TypeScript's TransactionPlanResultStatus union.
+    # Every status carries a context, so whatever the executor callback recorded
+    # before it failed — or before an earlier failure canceled it — survives into
+    # the result. Mirrors TypeScript's TransactionPlanResultStatus union.
 
     class SuccessfulStatus < T::Struct
-      const :transaction, Transactions::Transaction
+      const :transaction, T.nilable(Transactions::Transaction)
       const :context,     T::Hash[T.untyped, T.untyped]
       def kind = :successful
     end
 
     class FailedStatus < T::Struct
-      const :error, SolanaError
+      const :error,   SolanaError
+      const :context, T::Hash[T.untyped, T.untyped], default: {}.freeze
       def kind = :failed
     end
 
     class CanceledStatus < T::Struct
+      const :context, T::Hash[T.untyped, T.untyped], default: {}.freeze
       def kind = :canceled
     end
 
@@ -74,43 +78,55 @@ module Solana::Ruby::Kit
       ParallelTransactionPlanResult.new(plans: plans)
     end
 
-    # Mirrors `successfulSingleTransactionPlanResult(message, transaction, context)`.
+    # Mirrors `successfulSingleTransactionPlanResult(message, context)`.
+    #
+    # Upstream carries the transaction inside the context; Ruby keeps the separate
+    # +transaction+ reader it has always exposed. Pass it either way — as the positional
+    # argument, or under +:transaction+ in the context, where the reader picks it up.
+    # Nothing is written back into the context, which stays exactly what was passed.
     sig do
       params(
         message:     TransactionMessages::TransactionMessage,
-        transaction: Transactions::Transaction,
+        transaction: T.nilable(Transactions::Transaction),
         context:     T::Hash[T.untyped, T.untyped]
       ).returns(SingleTransactionPlanResult)
     end
-    def successful_single_transaction_plan_result(message, transaction, context = {})
+    def successful_single_transaction_plan_result(message, transaction = nil, context = {})
+      from_context = context[:transaction]
+      transaction ||= from_context if from_context.is_a?(Transactions::Transaction)
+
       SingleTransactionPlanResult.new(
         message: message,
-        status:  SuccessfulStatus.new(transaction: transaction, context: context)
+        status:  SuccessfulStatus.new(transaction: transaction, context: context.dup.freeze)
       )
     end
 
-    # Mirrors `failedSingleTransactionPlanResult(message, error)`.
+    # Mirrors `failedSingleTransactionPlanResult(message, error, context)`.
     sig do
       params(
         message: TransactionMessages::TransactionMessage,
-        error:   SolanaError
+        error:   SolanaError,
+        context: T::Hash[T.untyped, T.untyped]
       ).returns(SingleTransactionPlanResult)
     end
-    def failed_single_transaction_plan_result(message, error)
+    def failed_single_transaction_plan_result(message, error, context = {})
       SingleTransactionPlanResult.new(
         message: message,
-        status:  FailedStatus.new(error: error)
+        status:  FailedStatus.new(error: error, context: context.dup.freeze)
       )
     end
 
-    # Mirrors `canceledSingleTransactionPlanResult(message)`.
+    # Mirrors `canceledSingleTransactionPlanResult(message, context)`.
     sig do
-      params(message: TransactionMessages::TransactionMessage).returns(SingleTransactionPlanResult)
+      params(
+        message: TransactionMessages::TransactionMessage,
+        context: T::Hash[T.untyped, T.untyped]
+      ).returns(SingleTransactionPlanResult)
     end
-    def canceled_single_transaction_plan_result(message)
+    def canceled_single_transaction_plan_result(message, context = {})
       SingleTransactionPlanResult.new(
         message: message,
-        status:  CanceledStatus.new
+        status:  CanceledStatus.new(context: context.dup.freeze)
       )
     end
   end

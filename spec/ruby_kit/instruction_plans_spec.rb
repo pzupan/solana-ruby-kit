@@ -248,5 +248,103 @@ RSpec.describe RubyKit::InstructionPlans do
 
       expect { executor.call(plan) }.to raise_error(RubyKit::SolanaError)
     end
+
+    it 'reports the context the callback returns' do
+      tx       = RubyKit::Transactions.compile_transaction_message(message)
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(_context, _msg) { { transaction: tx, signature: 'sig' } }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.context).to eq({ transaction: tx, signature: 'sig' })
+      expect(result.status.transaction).to eq(tx)
+    end
+
+    it 'merges the returned context over the stored one, the returned value winning' do
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(context, _msg) {
+          context[:started_at] = 1
+          context[:signature]  = 'stored'
+          { signature: 'returned' }
+        }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.context).to eq({ started_at: 1, signature: 'returned' })
+    end
+
+    it 'preserves the context accumulated before a failure' do
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(context, _msg) {
+          context[:started_at] = 42
+          raise RubyKit::SolanaError.new(RubyKit::SolanaError::TRANSACTIONS__BLOCKHASH_NOT_FOUND)
+        }
+      )
+      plan = described_class.single_transaction_plan(message)
+
+      error = nil
+      begin
+        executor.call(plan)
+      rescue RubyKit::SolanaError => e
+        error = e
+      end
+
+      failed = error.transaction_plan_result
+      expect(failed.status.kind).to eq(:failed)
+      expect(failed.status.context).to eq({ started_at: 42 })
+    end
+
+    it 'gives each single plan its own context and carries one on canceled results' do
+      contexts = []
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(context, _msg) {
+          contexts << context
+          context[:seen] = contexts.length
+          raise RubyKit::SolanaError.new(RubyKit::SolanaError::TRANSACTIONS__BLOCKHASH_NOT_FOUND)
+        }
+      )
+      plan = described_class.sequential_transaction_plan([
+        described_class.single_transaction_plan(message),
+        described_class.single_transaction_plan(message)
+      ])
+
+      error = nil
+      begin
+        executor.call(plan)
+      rescue RubyKit::SolanaError => e
+        error = e
+      end
+
+      results = error.transaction_plan_result.plans
+      expect(results[0].status.kind).to eq(:failed)
+      expect(results[0].status.context).to eq({ seen: 1 })
+      # The second plan never ran, so it is canceled with the empty context it was given.
+      expect(results[1].status.kind).to eq(:canceled)
+      expect(results[1].status.context).to eq({})
+      expect(contexts.length).to eq(1)
+    end
+
+    it 'still accepts the legacy one-argument callback shape' do
+      tx       = RubyKit::Transactions.compile_transaction_message(message)
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(_msg) { { transaction: tx, context: { note: 'hi' } } }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.transaction).to eq(tx)
+      expect(result.status.context).to eq({ note: 'hi', transaction: tx })
+    end
+
+    it 'freezes the context reported on a result' do
+      executor = described_class.create_transaction_plan_executor(
+        execute_transaction_message: ->(context, _msg) {
+          context[:a] = 1
+          {}
+        }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.context).to be_frozen
+    end
   end
 end

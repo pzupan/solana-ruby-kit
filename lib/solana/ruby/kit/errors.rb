@@ -115,6 +115,10 @@ module Solana::Ruby::Kit
     OFFCHAIN_MESSAGES__NON_PRINTABLE_ASCII_CHARACTER     = :SOLANA_ERROR__OFFCHAIN_MESSAGES__NON_PRINTABLE_ASCII_CHARACTER
     OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG                  = :SOLANA_ERROR__OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG
     OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN    = :SOLANA_ERROR__OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN
+    # context: { actual_bytes:, expected_bytes: }
+    OFFCHAIN_MESSAGES__CONTENT_DOES_NOT_MATCH_EXPECTED   = :SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED
+    # context: { actual_addresses:, expected_addresses: }
+    OFFCHAIN_MESSAGES__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED = :SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED
 
     # ── Instruction plans ─────────────────────────────────────────────────────
     # context: { num_bytes_required:, num_free_bytes: }
@@ -256,6 +260,12 @@ module Solana::Ruby::Kit
         OFFCHAIN_MESSAGES__NON_PRINTABLE_ASCII_CHARACTER => 'Offchain message v0 contains non-printable ASCII character at index %{index}',
         OFFCHAIN_MESSAGES__MESSAGE_TOO_LONG              => 'Offchain message is too long (%{length} bytes, max %{max})',
         OFFCHAIN_MESSAGES__LEADING_ZERO_IN_SIGNING_DOMAIN => 'Offchain message signing domain must not start with a null byte',
+        OFFCHAIN_MESSAGES__CONTENT_DOES_NOT_MATCH_EXPECTED => 'The content of the offchain message does not match the content that was expected. ' \
+          'Expected content with a byte-length of %{expected_bytes}; got content with a byte-length of %{actual_bytes}. ' \
+          'The signer may have signed different data than was requested; do not trust its signature.',
+        OFFCHAIN_MESSAGES__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED => 'The offchain message lists different required signatories than was expected. ' \
+          'Expected [%{expected_addresses}]. Got [%{actual_addresses}]. ' \
+          'The signer may have signed different data than was requested; do not trust its signature.',
 
         # Instruction plans
         INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN    => 'Transaction message cannot accommodate the plan: requires %{num_bytes_required} bytes but only %{num_free_bytes} are available',
@@ -302,8 +312,19 @@ module Solana::Ruby::Kit
       @context = T.let(context, T::Hash[Symbol, T.untyped])
 
       template = ERROR_MESSAGES[code] || code.to_s
-      message  = context.empty? ? template : (template % context rescue "#{template} #{context}")
+      message  = context.empty? ? template : (template % display_context(context) rescue "#{template} #{context}")
       super(message)
+    end
+
+    private
+
+    # Values used to fill a message template. Array values — lists of addresses, say —
+    # interpolate as a comma-separated list rather than as Ruby's `inspect` output, so
+    # that `[%{expected_addresses}]` reads like the TypeScript original. `#context` is
+    # untouched and still hands back the array itself.
+    sig { params(context: T::Hash[Symbol, T.untyped]).returns(T::Hash[Symbol, T.untyped]) }
+    def display_context(context)
+      context.transform_values { |value| value.is_a?(Array) ? value.join(', ') : value }
     end
   end
 end

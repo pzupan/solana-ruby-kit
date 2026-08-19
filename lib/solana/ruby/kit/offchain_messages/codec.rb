@@ -31,8 +31,12 @@ module Solana::Ruby::Kit
         buf << domain_b
         buf << [msg.version].pack('C')
 
-        if msg.version >= 1 && msg.application_domain
-          app_b = T.must(msg.application_domain).encode('ASCII').b
+        # The v1 application-domain block is always emitted, using a zero length when
+        # there is no application domain. The decoder reads this length unconditionally
+        # for v1, so omitting the block would desynchronise it and make it read the
+        # message length as an application-domain length.
+        if msg.version >= 1
+          app_b = msg.application_domain ? T.must(msg.application_domain).encode('ASCII').b : ''.b
           Kernel.raise ArgumentError, 'Application domain exceeds 65535 bytes' if app_b.bytesize > 0xFFFF
 
           buf << [app_b.bytesize].pack('v')
@@ -62,7 +66,9 @@ module Solana::Ruby::Kit
         if version >= 1
           app_len = b.byteslice(offset, 2)&.unpack1('v') || 0
           offset += 2
-          application_domain = b.byteslice(offset, app_len)&.force_encoding('ASCII')
+          # A zero length means there was no application domain, not an empty one, so
+          # that encode/decode round-trips a message that never had one.
+          application_domain = app_len.positive? ? b.byteslice(offset, app_len)&.force_encoding('ASCII') : nil
           offset += app_len
         end
 
@@ -94,12 +100,14 @@ module Solana::Ruby::Kit
         ).returns(T::Boolean)
       end
       def verify_offchain_message_signature(verify_key, signature, msg)
-        payload  = encode_offchain_message(msg)
-        vk       = RbNaCl::VerifyKey.new(verify_key)
-        sig_bytes = signature.respond_to?(:to_bytes) ? signature.to_s : [signature.value].pack('H*')
+        payload = encode_offchain_message(msg)
+        vk      = RbNaCl::VerifyKey.new(verify_key)
+        # `Signature` holds a base58 string (that is what `sign_offchain_message` returns),
+        # so it has to be decoded back to the 64 raw bytes RbNaCl expects.
+        sig_bytes = Solana::Ruby::Kit::Encoding::Base58.decode(signature.to_s)
         vk.verify(sig_bytes, payload)
         true
-      rescue RbNaCl::BadSignatureError
+      rescue RbNaCl::BadSignatureError, RbNaCl::LengthError
         false
       end
     end

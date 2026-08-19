@@ -13,11 +13,22 @@ module Solana::Ruby::Kit
     # executing each single transaction message and collecting results.
     #
     # Configuration:
-    #   execute_transaction_message: ->(message) { { transaction:, context: } }
-    #     Called for each SingleTransactionPlan. Must return a hash with:
-    #       :transaction — the signed Transaction
-    #       :context     — optional Hash of extra data (defaults to {})
-    #     Raise a SolanaError to signal failure; remaining plans will be canceled.
+    #   execute_transaction_message: ->(context, message) { context_to_report }
+    #     Called once per SingleTransactionPlan with a fresh, mutable +context+ Hash and
+    #     the transaction message to execute. Store data on +context+ as execution
+    #     progresses, and return the context a successful result should carry. The two
+    #     serve different outcomes: what you *store* reaches a failed or canceled result,
+    #     what you *return* reaches a successful one. On success the returned Hash is
+    #     merged over the stored one, the returned value winning, so anything recorded
+    #     but left out of the return value is still reported.
+    #
+    #     Raise a SolanaError to signal failure; remaining plans will be canceled. The
+    #     context accumulated up to the point of failure is preserved on the resulting
+    #     failed result, which is useful for debugging or building recovery plans.
+    #
+    #     A one-argument callable is still accepted for backwards compatibility with the
+    #     shape this method used to require — `->(message) { { transaction:, context: } }`
+    #     — and is adapted onto the context flow above.
     #
     # The returned executor is a lambda: executor.call(transaction_plan) -> TransactionPlanResult
     #
@@ -77,24 +88,53 @@ module Solana::Ruby::Kit
     end
 
     def executor_traverse_single(plan, execute_fn, state)
-      return canceled_single_transaction_plan_result(plan.message) if state[:canceled]
+      # A fresh context per single transaction plan. Nothing is populated yet — filling
+      # it in is the callback's job, which is what lets a partial context survive an error.
+      context = {}
+      return canceled_single_transaction_plan_result(plan.message, context) if state[:canceled]
 
       begin
-        result      = execute_fn.call(plan.message)
-        transaction = result.fetch(:transaction)
-        context     = result.fetch(:context, {})
-        successful_single_transaction_plan_result(plan.message, transaction, context)
+        returned = executor_invoke(execute_fn, context, plan.message)
+        # The callback told us what the successful result should carry, so take it as-is
+        # and derive nothing from it. Anything it stored but left out of the return value
+        # is kept, since dropping it would lose data it deliberately recorded.
+        successful_single_transaction_plan_result(plan.message, nil, context.merge(returned))
       rescue SolanaError => e
         state[:canceled] = true
-        failed_single_transaction_plan_result(plan.message, e)
+        failed_single_transaction_plan_result(plan.message, e, context)
       rescue => e
         state[:canceled] = true
         wrapped = SolanaError.new(
           SolanaError::INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
           { cause: e }
         )
-        failed_single_transaction_plan_result(plan.message, wrapped)
+        failed_single_transaction_plan_result(plan.message, wrapped, context)
       end
+    end
+
+    # Calls the configured callback, adapting the legacy one-argument shape onto the
+    # context flow. Returns the Hash the successful result should carry.
+    sig do
+      params(
+        execute_fn: T.untyped,
+        context:    T::Hash[T.untyped, T.untyped],
+        message:    TransactionMessages::TransactionMessage
+      ).returns(T::Hash[T.untyped, T.untyped])
+    end
+    def executor_invoke(execute_fn, context, message)
+      unless execute_fn.arity == 1
+        returned = execute_fn.call(context, message)
+        return returned.is_a?(Hash) ? returned : {}
+      end
+
+      # Legacy shape: `->(message) { { transaction:, context: } }`. There is no mutable
+      # context to record into, so everything it reports arrives at once on the way out.
+      legacy      = execute_fn.call(message)
+      legacy      = {} unless legacy.is_a?(Hash)
+      returned    = legacy.fetch(:context, {}).dup
+      transaction = legacy[:transaction]
+      returned[:transaction] = transaction if transaction
+      returned
     end
 
     def executor_find_error(result)
@@ -112,6 +152,7 @@ module Solana::Ruby::Kit
     private_class_method :executor_traverse_sequential
     private_class_method :executor_traverse_parallel
     private_class_method :executor_traverse_single
+    private_class_method :executor_invoke
     private_class_method :executor_find_error
   end
 end

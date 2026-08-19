@@ -486,19 +486,54 @@ ix = ATA.create_instruction(
 )
 ```
 
-### `Solana::Ruby::Kit::OffchainMessages` — `@solana/signers`
+### `Solana::Ruby::Kit::OffchainMessages` — `@solana/signers`, `@solana/offchain-messages`
 
 Sign and verify off-chain messages (Phantom wallet standard).
 
 ```ruby
 OffChain = Solana::Ruby::Kit::OffchainMessages
 
-msg = OffChain.create_message('Hello, Solana!')
-encoded = OffChain.encode_message(msg)
+msg = OffChain::Message.new(
+  version: 1,                     # 0 = legacy printable ASCII, 1 = extended UTF-8
+  domain:  'example.com',
+  message: 'Hello, Solana!'
+)
 
-sig     = signer.sign(encoded)
-decoded = OffChain.decode_message(encoded)
+encoded = OffChain.encode_offchain_message(msg)
+decoded = OffChain.decode_offchain_message(encoded)
+
+signature = OffChain.sign_offchain_message(signer, msg)
+OffChain.verify_offchain_message_signature(verify_key_bytes, signature, msg)  # => true
 ```
+
+#### Checking that a signer signed what you asked
+
+A wallet returns the message bytes it signed alongside its signature. Verifying that
+signature only proves the signer produced it over *those* bytes — not that those bytes
+are the message you asked for. Compare the two before you verify the signature, so a
+signer that signed the wrong thing is reported as a content mismatch rather than as a
+confusing cryptographic failure.
+
+```ruby
+Addresses = Solana::Ruby::Kit::Addresses
+
+expected = OffChain::MessageV1.new(
+  content:              'Transfer 1 SOL to Alice',
+  required_signatories: [OffChain::Signatory.new(address: Addresses::Address.new(my_address))]
+)
+
+# Raises SolanaError if the content or the required signatories differ.
+# Required signatories are compared ignoring order; content is compared exactly.
+OffChain.assert_offchain_message_v1_equal(received, expected)
+```
+
+The error context reports content lengths in UTF-8 bytes rather than the content itself,
+so message text never reaches your logs or error reporting.
+
+> **Note:** `MessageV1` mirrors the newer `@solana/offchain-messages` v1 shape (UTF-8
+> `content` plus `required_signatories`) and is a distinct type from `Message` above,
+> which models the older `@solana/signers` domain form. The v1 wire codec is not yet
+> translated, so `received` must come from your own decoding for now.
 
 ### `Solana::Ruby::Kit::ResourceLimitEstimation` — `@solana/kit`
 
@@ -579,14 +614,19 @@ planner = Plans.create_transaction_planner(
 transaction_plan = planner.call(plan, max_instructions_per_transaction: 8)
 
 # ── 3. Create an executor and run it ─────────────────────────────────────────
-# execute_transaction_message receives each fully-packed TransactionMessage and
-# must return { transaction: <signed Transaction>, context: <optional Hash> }.
-# If it raises, the executor cancels all remaining messages and re-raises.
+# execute_transaction_message receives a fresh, mutable context Hash and each
+# fully-packed TransactionMessage, and returns the context a successful result
+# should carry. The two serve different outcomes: what you *store* on the context
+# reaches a failed or canceled result, what you *return* reaches a successful one
+# (merged over what was stored, the returned value winning).
+# If it raises, the executor cancels all remaining messages and re-raises — and the
+# context as it stood at that moment is preserved on the failed result.
 executor = Plans.create_transaction_plan_executor(
-  execute_transaction_message: ->(message) {
+  execute_transaction_message: ->(context, message) {
     transaction = Kit::Transactions.compile_transaction_message(message)
     signed      = Kit::Transactions.sign_transaction([signer.key_pair.signing_key], transaction)
-    wire        = Base64.strict_encode64(Kit::Transactions.wire_encode_transaction(signed))
+    context[:transaction] = signed  # recorded now, so it survives a failure below
+    wire = Base64.strict_encode64(Kit::Transactions.wire_encode_transaction(signed))
     rpc.send_transaction(wire)
     { transaction: signed }
   }
@@ -595,6 +635,10 @@ executor = Plans.create_transaction_plan_executor(
 result = executor.call(transaction_plan)
 # result is a TransactionPlanResult tree mirroring the transaction_plan structure.
 # Each leaf is a SingleTransactionPlanResult with status :successful, :failed, or :canceled.
+# Every status carries a #context; a :successful one also exposes #transaction.
+
+# A one-argument lambda returning { transaction:, context: } — the shape this method
+# required before v7.1.0 — is still accepted and adapted onto the flow above.
 
 # ── 4. Plan types ─────────────────────────────────────────────────────────────
 Plans.single_instruction_plan(ix)                      # wrap one instruction
