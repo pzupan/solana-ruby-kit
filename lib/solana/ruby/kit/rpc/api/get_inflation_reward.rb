@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -24,6 +26,9 @@ module Solana::Ruby::Kit
       # Mirrors TypeScript's GetInflationRewardApi.getInflationReward.
       module GetInflationReward
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(
@@ -31,7 +36,7 @@ module Solana::Ruby::Kit
             commitment:       T.nilable(Symbol),
             epoch:            T.nilable(Integer),
             min_context_slot: T.nilable(Integer)
-          ).returns(T::Array[T.nilable(T.untyped)])
+          ).returns(T::Array[T.untyped])
         end
         def get_inflation_reward(addresses, commitment: nil, epoch: nil, min_context_slot: nil)
           addr_strings = addresses.map { |a| a.respond_to?(:value) ? a.value : a.to_s }

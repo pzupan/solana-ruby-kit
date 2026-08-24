@@ -314,6 +314,82 @@ RSpec.describe RubyKit::Rpc::Client do
   end
 
   # ---------------------------------------------------------------------------
+  # get_token_supply
+  # ---------------------------------------------------------------------------
+  describe '#get_token_supply' do
+    let(:mint) { 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' }
+
+    it 'returns the mint supply as a contextual TokenAmount' do
+      stub_rpc('getTokenSupply', result: {
+        'context' => { 'slot' => 1_114 },
+        'value'   => {
+          'amount'         => '100000',
+          'decimals'       => 2,
+          'uiAmount'       => 1000.0,
+          'uiAmountString' => '1000'
+        }
+      })
+
+      res = client.get_token_supply(mint)
+      expect(res.slot).to                  eq(1_114)
+      expect(res.value[:amount]).to        eq('100000')
+      expect(res.value[:decimals]).to      eq(2)
+      expect(res.value[:ui_amount]).to     eq(1000.0)
+      expect(res.value[:ui_amount_string]).to eq('1000')
+    end
+
+    it 'sends the commitment config when one is given' do
+      stub_request(:post, ENDPOINT)
+        .with(body: hash_including(
+          'method' => 'getTokenSupply',
+          'params' => [mint, { 'commitment' => 'finalized' }]
+        ))
+        .to_return(
+          status:  200,
+          body:    JSON.generate({
+            'jsonrpc' => '2.0', 'id' => 1,
+            'result'  => {
+              'context' => { 'slot' => 1 },
+              'value'   => {
+                'amount' => '0', 'decimals' => 0, 'uiAmount' => 0.0, 'uiAmountString' => '0'
+              }
+            }
+          }),
+          headers: { 'Content-Type' => 'application/json' }
+        )
+
+      expect(client.get_token_supply(mint, commitment: :finalized).value[:amount]).to eq('0')
+    end
+
+    it 'omits the config object when no commitment is given' do
+      stub_request(:post, ENDPOINT)
+        .with(body: hash_including('method' => 'getTokenSupply', 'params' => [mint]))
+        .to_return(
+          status:  200,
+          body:    JSON.generate({
+            'jsonrpc' => '2.0', 'id' => 1,
+            'result'  => {
+              'context' => { 'slot' => 1 },
+              'value'   => {
+                'amount' => '7', 'decimals' => 0, 'uiAmount' => 7.0, 'uiAmountString' => '7'
+              }
+            }
+          }),
+          headers: { 'Content-Type' => 'application/json' }
+        )
+
+      expect(client.get_token_supply(mint).value[:amount]).to eq('7')
+    end
+
+    it 'raises RpcError when the mint is not a valid token mint' do
+      stub_rpc_error('getTokenSupply', code: -32602, message: 'Invalid param: not a Token mint')
+
+      expect { client.get_token_supply(mint) }
+        .to raise_error(RubyKit::Rpc::RpcError, /not a Token mint/)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # get_inflation_reward
   # ---------------------------------------------------------------------------
   describe '#get_inflation_reward' do

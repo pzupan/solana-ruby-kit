@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 require 'base64'
 require_relative '../../keys/signatures'
 require_relative '../../transactions/compiler'
@@ -21,6 +23,9 @@ module Solana::Ruby::Kit
       # NOT wait for confirmation.  Use `get_signature_statuses` to poll for commitment.
       module SendTransaction
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

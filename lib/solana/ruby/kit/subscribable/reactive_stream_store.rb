@@ -108,7 +108,7 @@ module Solana::Ruby::Kit
       # Internal: transition state and notify all subscribers.
       sig { params(new_state: ReactiveState).void }
       def _set_state(new_state)
-        subs = nil
+        subs = T.let(nil, T.nilable(T::Array[T.proc.void]))
         @mutex.synchronize do
           return if @state.equal?(new_state)
           @state = new_state
@@ -167,7 +167,7 @@ module Solana::Ruby::Kit
         return if @mutex.synchronize { @stopped }
 
         # Fresh active flag for this connection window
-        active = [true]
+        active = T.let([true], T::Array[T::Boolean])
         @mutex.synchronize { @conn_active = active }
 
         # inner_signal fires (raises) once this connection is superseded or errors out,
@@ -193,8 +193,8 @@ module Solana::Ruby::Kit
         publisher.on(@error_channel, signal: inner_signal) do |err|
           next unless active[0] && get_unified_state.status != 'error'
           active[0] = false
-          stale_data = get_unified_state.data
-          _set_state(ReactiveState.new(status: 'error', data: stale_data, error: err))
+          last_data = get_unified_state.data
+          _set_state(ReactiveState.new(status: 'error', data: last_data, error: err))
         end
       end
     end

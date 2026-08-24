@@ -17,18 +17,27 @@ module Solana::Ruby::Kit
     #                   | ParallelTransactionPlan
 
     class SingleTransactionPlan < T::Struct
+      extend T::Sig
+
       const :message, TransactionMessages::TransactionMessage
+      sig { returns(Symbol) }
       def kind = :single
     end
 
     class SequentialTransactionPlan < T::Struct
+      extend T::Sig
+
       const :plans,     T::Array[T.untyped]  # Array[TransactionPlan]
       const :divisible, T::Boolean
+      sig { returns(Symbol) }
       def kind = :sequential
     end
 
     class ParallelTransactionPlan < T::Struct
+      extend T::Sig
+
       const :plans, T::Array[T.untyped]  # Array[TransactionPlan]
+      sig { returns(Symbol) }
       def kind = :parallel
     end
 

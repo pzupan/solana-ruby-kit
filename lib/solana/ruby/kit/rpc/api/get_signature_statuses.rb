@@ -1,6 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
 require_relative '../../rpc_types/account_info'
 
 module Solana::Ruby::Kit
@@ -23,6 +24,9 @@ module Solana::Ruby::Kit
       #   .value — Array of SignatureStatus | nil (nil for unknown signatures)
       module GetSignatureStatuses
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

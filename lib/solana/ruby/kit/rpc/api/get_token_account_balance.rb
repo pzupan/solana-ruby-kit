@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -8,6 +10,9 @@ module Solana::Ruby::Kit
       # Mirrors TypeScript's GetTokenAccountBalanceApi.getTokenAccountBalance.
       module GetTokenAccountBalance
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

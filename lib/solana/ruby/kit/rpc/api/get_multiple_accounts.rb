@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 require 'base64'
 
 module Solana::Ruby::Kit
@@ -10,6 +12,9 @@ module Solana::Ruby::Kit
       # Mirrors TypeScript's GetMultipleAccountsApi.getMultipleAccounts.
       module GetMultipleAccounts
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

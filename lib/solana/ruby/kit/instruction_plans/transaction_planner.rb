@@ -11,6 +11,8 @@ module Solana::Ruby::Kit
   module InstructionPlans
     extend T::Sig
 
+    module_function
+
     # Creates a TransactionPlanner — a callable that converts an InstructionPlan
     # into a TransactionPlan by packing instructions into transaction messages.
     #
@@ -67,11 +69,11 @@ module Solana::Ruby::Kit
       }
     end
 
-    module_function :create_transaction_planner
-
     # ── Private helpers ────────────────────────────────────────────────────────
 
     module_function
+
+    sig { params(plan: T.untyped, ctx: T.untyped).returns(T.untyped) }
 
     def planner_traverse(plan, ctx)
       case plan.kind
@@ -86,6 +88,8 @@ module Solana::Ruby::Kit
         )
       end
     end
+
+    sig { params(plan: T.untyped, ctx: T.untyped).returns(T.untyped) }
 
     def planner_traverse_sequential(plan, ctx)
       must_fit_in_parent = ctx[:parent] && (ctx[:parent].kind == :parallel || !plan.divisible)
@@ -118,6 +122,8 @@ module Solana::Ruby::Kit
       { kind: :sequential, divisible: plan.divisible, plans: tx_plans }
     end
 
+    sig { params(plan: T.untyped, ctx: T.untyped).returns(T.untyped) }
+
     def planner_traverse_parallel(plan, ctx)
       candidates = ctx[:parent_candidates].dup
       tx_plans   = []
@@ -139,6 +145,8 @@ module Solana::Ruby::Kit
       { kind: :parallel, plans: tx_plans }
     end
 
+    sig { params(plan: T.untyped, ctx: T.untyped).returns(T.untyped) }
+
     def planner_traverse_single(plan, ctx)
       predicate = ->(msg) { TransactionMessages.append_instructions(msg, [plan.instruction]) }
       candidate = planner_select_and_mutate_candidate(ctx, ctx[:parent_candidates], &predicate)
@@ -147,6 +155,8 @@ module Solana::Ruby::Kit
       msg = planner_create_new_message(ctx, &predicate)
       { kind: :single, message: msg }
     end
+
+    sig { params(plan: T.untyped, ctx: T.untyped).returns(T.untyped) }
 
     def planner_traverse_message_packer(plan, ctx)
       packer     = plan.get_message_packer.call
@@ -175,6 +185,8 @@ module Solana::Ruby::Kit
       end
     end
 
+    sig { params(ctx: T.untyped, candidates: T.untyped, predicate: T.proc.params(arg0: T.untyped).returns(T.untyped)).returns(T.untyped) }
+
     def planner_select_and_mutate_candidate(ctx, candidates, &predicate)
       candidates.each do |candidate|
         begin
@@ -198,6 +210,8 @@ module Solana::Ruby::Kit
       nil
     end
 
+    sig { params(ctx: T.untyped, predicate: T.proc.params(arg0: T.untyped).returns(T.untyped)).returns(T.untyped) }
+
     def planner_create_new_message(ctx, &predicate)
       new_msg      = ctx[:create_transaction_message].call
       updated_msg  = ctx[:on_transaction_message_updated].call(predicate.call(new_msg))
@@ -219,6 +233,8 @@ module Solana::Ruby::Kit
 
       updated_msg
     end
+
+    sig { params(plan: T.untyped, message: T.untyped, ctx: T.untyped).returns(T.untyped) }
 
     def planner_fit_entire_plan(plan, message, ctx)
       case plan.kind
@@ -259,16 +275,22 @@ module Solana::Ruby::Kit
       end
     end
 
+    sig { params(plan: T.untyped).returns(T.untyped) }
+
     def planner_get_sequential_candidate(plan)
       return plan if plan[:kind] == :single
       return nil  unless plan[:kind] == :sequential && plan[:plans]&.any?
       planner_get_sequential_candidate(plan[:plans].last)
     end
 
+    sig { params(plan: T.untyped).returns(T.untyped) }
+
     def planner_get_parallel_candidates(plan)
       return [plan] if plan[:kind] == :single
       (plan[:plans] || []).flat_map { |p| planner_get_parallel_candidates(p) }
     end
+
+    sig { params(plan: T.untyped).returns(T.untyped) }
 
     def planner_freeze(plan)
       case plan[:kind]

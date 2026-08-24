@@ -115,7 +115,7 @@ module Solana::Ruby::Kit
           reason: 'message section is missing'
         )
       end
-      message_bytes = T.must(msg_slice).b
+      message_bytes = msg_slice.b
 
       # 4. Determine version and locate the message header.
       #    Legacy transactions:   first byte = num_required_signatures (0..127)
@@ -139,14 +139,14 @@ module Solana::Ruby::Kit
 
       account_addrs = T.let([], T::Array[String])
       num_accounts.times do
-        account_addrs << Addresses.encode_address(message_bytes[msg_pos, 32].b)
+        account_addrs << Addresses.encode_address(T.must(message_bytes[msg_pos, 32]).b)
         msg_pos += 32
       end
 
       # 6. Build the signatures map.
       #    The first +num_required_sigs+ accounts in the account table are the
       #    signers; their raw_sigs slots are positionally aligned.
-      signer_addrs = account_addrs[0, num_required_sigs]
+      signer_addrs = T.must(account_addrs[0, num_required_sigs])
       signatures   = T.let({}, T::Hash[String, T.nilable(String)])
       signer_addrs.each_with_index { |addr, i| signatures[addr] = raw_sigs[i] }
 
@@ -234,7 +234,7 @@ module Solana::Ruby::Kit
     def decode_compact_u16(bytes, offset)
       value = 0
       shift = 0
-      loop do
+      Kernel.loop do
         byte = bytes.getbyte(offset)
         if byte.nil?
           Kernel.raise SolanaError.new(

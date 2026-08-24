@@ -82,8 +82,8 @@ module Solana::Ruby::Kit
       # most recent call's result updates state; superseded threads are ignored.
       sig { params(args: T.untyped).void }
       def dispatch(*args)
-        gen        = nil
-        prev_data  = nil
+        gen        = T.let(nil, T.nilable(Integer))
+        prev_data  = T.let(nil, T.untyped)
         @mutex.synchronize do
           @current_gen += 1
           gen       = @current_gen
@@ -94,7 +94,7 @@ module Solana::Ruby::Kit
 
         Thread.new do
           begin
-            result  = @fn.call(*args)
+            result  = @fn.call(*T.unsafe(args))
             active  = @mutex.synchronize do
               if @current_gen == gen
                 @state = ReactiveActionState.new(status: 'success', data: result)
@@ -125,8 +125,8 @@ module Solana::Ruby::Kit
       # by a concurrent dispatch or reset().
       sig { params(args: T.untyped).returns(T.untyped) }
       def dispatch_async(*args)
-        gen        = nil
-        prev_data  = nil
+        gen        = T.let(nil, T.nilable(Integer))
+        prev_data  = T.let(nil, T.untyped)
         @mutex.synchronize do
           @current_gen += 1
           gen       = @current_gen
@@ -135,7 +135,7 @@ module Solana::Ruby::Kit
         end
         _notify
 
-        result = @fn.call(*args)
+        result = @fn.call(*T.unsafe(args))
 
         active = @mutex.synchronize do
           if @current_gen == gen

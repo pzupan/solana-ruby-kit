@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -21,6 +23,9 @@ module Solana::Ruby::Kit
       # Mirrors TypeScript's GetEpochScheduleApi.getEpochSchedule.
       module GetEpochSchedule
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig { returns(T.untyped) }
         def get_epoch_schedule

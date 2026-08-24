@@ -21,7 +21,7 @@ module Solana::Ruby::Kit
     #     ->(tx) { Solana::Ruby::Kit::TransactionMessages.set_fee_payer(fee_payer_address, tx) },
     #     ->(tx) { Solana::Ruby::Kit::TransactionMessages.set_blockhash_lifetime(blockhash, tx) },
     #   )
-    sig { params(value: T.untyped, fns: T::Array[T.proc.params(arg0: T.untyped).returns(T.untyped)]).returns(T.untyped) }
+    sig { params(value: T.untyped, fns: T.proc.params(arg0: T.untyped).returns(T.untyped)).returns(T.untyped) }
     def pipe(value, *fns)
       fns.reduce(value) { |acc, fn| T.unsafe(fn).call(acc) }
     end

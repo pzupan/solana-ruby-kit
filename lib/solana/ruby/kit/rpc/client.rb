@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative 'transport'
+require_relative 'api/has_transport'
 require_relative 'api/get_slot'
 require_relative 'api/get_balance'
 require_relative 'api/get_latest_blockhash'
@@ -17,6 +18,7 @@ require_relative 'api/get_program_accounts'
 require_relative 'api/get_transaction'
 require_relative 'api/get_token_account_balance'
 require_relative 'api/get_token_accounts_by_owner'
+require_relative 'api/get_token_supply'
 require_relative 'api/get_epoch_info'
 require_relative 'api/get_vote_accounts'
 require_relative 'api/simulate_transaction'
@@ -43,6 +45,8 @@ module Solana::Ruby::Kit
     class Client
       extend T::Sig
 
+      include Api::HasTransport
+
       include Api::GetSlot
       include Api::GetBalance
       include Api::GetLatestBlockhash
@@ -58,6 +62,7 @@ module Solana::Ruby::Kit
       include Api::GetTransaction
       include Api::GetTokenAccountBalance
       include Api::GetTokenAccountsByOwner
+      include Api::GetTokenSupply
       include Api::GetEpochInfo
       include Api::GetVoteAccounts
       include Api::SimulateTransaction
@@ -67,7 +72,7 @@ module Solana::Ruby::Kit
       include Api::GetSignaturesForAddress
       include Api::GetTransactionsForAddress
 
-      sig { returns(Transport) }
+      sig { override.returns(Transport) }
       attr_reader :transport
 
       # @param cluster_url [RpcTypes::ClusterUrl, String]  endpoint to connect to.

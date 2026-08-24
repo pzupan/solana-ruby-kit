@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -54,6 +56,9 @@ module Solana::Ruby::Kit
       # See https://solana.com/docs/rpc/http/gettransactionsforaddress
       module GetTransactionsForAddress
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         # Maps the snake_case keys of a Ruby +filters+ hash onto the wire names.
         # Comparison operators (:eq, :gt, :gte, :lt, :lte) pass through as-is.

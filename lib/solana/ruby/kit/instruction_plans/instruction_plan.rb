@@ -23,7 +23,10 @@ module Solana::Ruby::Kit
 
     # A plan that wraps a single instruction.
     class SingleInstructionPlan < T::Struct
+      extend T::Sig
+
       const :instruction, Instructions::Instruction
+      sig { returns(Symbol) }
       def kind = :single
     end
 
@@ -31,21 +34,30 @@ module Solana::Ruby::Kit
     # +divisible: true+ allows the planner to split children across transactions.
     # +divisible: false+ means all children should be atomic (one tx or a bundle).
     class SequentialInstructionPlan < T::Struct
+      extend T::Sig
+
       const :plans,     T::Array[T.untyped]  # Array[InstructionPlan]
       const :divisible, T::Boolean
+      sig { returns(Symbol) }
       def kind = :sequential
     end
 
     # A plan whose children may execute concurrently or be packed in any order.
     class ParallelInstructionPlan < T::Struct
+      extend T::Sig
+
       const :plans, T::Array[T.untyped]  # Array[InstructionPlan]
+      sig { returns(Symbol) }
       def kind = :parallel
     end
 
     # Provides a MessagePacker that dynamically packs instructions into messages.
     # The +get_message_packer+ proc returns a fresh MessagePacker each call.
     class MessagePackerInstructionPlan < T::Struct
+      extend T::Sig
+
       const :get_message_packer, T.untyped  # Proc -> MessagePacker
+      sig { returns(Symbol) }
       def kind = :message_packer
     end
 
@@ -199,7 +211,7 @@ module Solana::Ruby::Kit
                   return packed
                 end
 
-                next_packed = TransactionMessages.append_instructions(packed, [instructions[i]])
+                next_packed = TransactionMessages.append_instructions(packed, [T.must(instructions[i])])
                 size        = Transactions.get_transaction_message_size(next_packed)
 
                 if size > Transactions::TRANSACTION_SIZE_LIMIT

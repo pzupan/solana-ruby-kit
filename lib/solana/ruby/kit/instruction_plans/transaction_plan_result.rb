@@ -21,38 +21,56 @@ module Solana::Ruby::Kit
     # the result. Mirrors TypeScript's TransactionPlanResultStatus union.
 
     class SuccessfulStatus < T::Struct
+      extend T::Sig
+
       const :transaction, T.nilable(Transactions::Transaction)
       const :context,     T::Hash[T.untyped, T.untyped]
+      sig { returns(Symbol) }
       def kind = :successful
     end
 
     class FailedStatus < T::Struct
+      extend T::Sig
+
       const :error,   SolanaError
       const :context, T::Hash[T.untyped, T.untyped], default: {}.freeze
+      sig { returns(Symbol) }
       def kind = :failed
     end
 
     class CanceledStatus < T::Struct
+      extend T::Sig
+
       const :context, T::Hash[T.untyped, T.untyped], default: {}.freeze
+      sig { returns(Symbol) }
       def kind = :canceled
     end
 
     # ── Result plan types ──────────────────────────────────────────────────────
 
     class SingleTransactionPlanResult < T::Struct
+      extend T::Sig
+
       const :message, TransactionMessages::TransactionMessage
       const :status,  T.untyped  # SuccessfulStatus | FailedStatus | CanceledStatus
+      sig { returns(Symbol) }
       def kind = :single
     end
 
     class SequentialTransactionPlanResult < T::Struct
+      extend T::Sig
+
       const :plans,     T::Array[T.untyped]  # Array[TransactionPlanResult]
       const :divisible, T::Boolean
+      sig { returns(Symbol) }
       def kind = :sequential
     end
 
     class ParallelTransactionPlanResult < T::Struct
+      extend T::Sig
+
       const :plans, T::Array[T.untyped]  # Array[TransactionPlanResult]
+      sig { returns(Symbol) }
       def kind = :parallel
     end
 

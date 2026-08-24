@@ -3,6 +3,7 @@
 
 require_relative 'transport'
 require_relative 'subscription'
+require_relative 'api/has_transport'
 require_relative 'autopinger'
 require_relative 'api/account_notifications'
 require_relative 'api/logs_notifications'
@@ -23,6 +24,8 @@ module Solana::Ruby::Kit
     class Client
       extend T::Sig
 
+      include Api::HasTransport
+
       include Api::AccountNotifications
       include Api::LogsNotifications
       include Api::ProgramNotifications
@@ -30,7 +33,7 @@ module Solana::Ruby::Kit
       include Api::SignatureNotifications
       include Api::SlotNotifications
 
-      sig { returns(Transport) }
+      sig { override.returns(Transport) }
       attr_reader :transport
 
       sig do
@@ -56,7 +59,7 @@ module Solana::Ruby::Kit
 
       # Build a Subscription wrapping an AsyncIterable enumerator and
       # an auto-unsubscribe on close.
-      sig { params(sub_id: T.untyped, unsub_method: String).returns(Subscription) }
+      sig { override.params(sub_id: T.untyped, unsub_method: String).returns(Subscription) }
       def _build_subscription(sub_id, unsub_method)
         publisher  = @transport.publisher
         enumerator = Subscribable::AsyncIterable.from_publisher(

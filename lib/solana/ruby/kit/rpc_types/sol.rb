@@ -40,7 +40,9 @@ module Solana::Ruby::Kit
 
       sig { params(other: T.untyped).returns(T::Boolean) }
       def ==(other)
-        other.is_a?(Sol) && @raw == other.raw
+        return false unless other.is_a?(Sol)
+
+        @raw == other.raw
       end
 
       sig { returns(Integer) }
@@ -50,8 +52,8 @@ module Solana::Ruby::Kit
     end
 
     SOL_DECIMALS    = T.let(9,         Integer)
-    SOL_SCALE       = T.let(10**9,     Integer)
-    SOL_RAW_MAX     = T.let(2**64 - 1, Integer)
+    SOL_SCALE       = T.let(1_000_000_000, Integer)
+    SOL_RAW_MAX     = T.let(Kernel.Integer(2**64 - 1), Integer)
 
     module_function
 
@@ -66,17 +68,17 @@ module Solana::Ruby::Kit
     # Mirrors TypeScript's sol(value, rounding?).
     sig { params(value: String).returns(Sol) }
     def sol(value)
-      bd = BigDecimal(value)
+      bd = Kernel.BigDecimal(value)
       Kernel.raise SolanaError.new(SolanaError::FIXED_POINTS__STRICT_MODE_PRECISION_LOSS) if bd < 0
 
       scaled = bd * SOL_SCALE
       raw    = scaled.to_i
 
-      unless scaled == BigDecimal(raw.to_s)
+      unless scaled == Kernel.BigDecimal(raw.to_s)
         Kernel.raise SolanaError.new(SolanaError::FIXED_POINTS__STRICT_MODE_PRECISION_LOSS)
       end
 
-      Kernel.raise SolanaError.new(SolanaError::SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE) if raw > SOL_RAW_MAX
+      Kernel.raise SolanaError.new(SolanaError::LAMPORTS_OUT_OF_RANGE) if raw > SOL_RAW_MAX
 
       Sol.new(raw)
     end

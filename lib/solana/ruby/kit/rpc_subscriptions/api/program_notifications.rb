@@ -1,12 +1,17 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module RpcSubscriptions
     module Api
       # Subscribe to program account change notifications.
       module ProgramNotifications
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

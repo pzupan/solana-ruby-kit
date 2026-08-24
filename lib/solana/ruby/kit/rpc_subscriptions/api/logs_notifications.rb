@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module RpcSubscriptions
     module Api
@@ -8,6 +10,9 @@ module Solana::Ruby::Kit
       # +filter+ may be 'all', 'allWithVotes', or { 'mentions' => [pubkey] }.
       module LogsNotifications
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

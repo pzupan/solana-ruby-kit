@@ -147,6 +147,7 @@ module Solana::Ruby::Kit
 
     # ── Fixed-points ──────────────────────────────────────────────────────────
     FIXED_POINTS__STRICT_MODE_PRECISION_LOSS              = :SOLANA_ERROR__FIXED_POINTS__STRICT_MODE_PRECISION_LOSS
+    LAMPORTS_OUT_OF_RANGE                                 = :SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE
 
     # ── Invariant violations (internal) ──────────────────────────────────────
     INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = :SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING
@@ -286,6 +287,7 @@ module Solana::Ruby::Kit
 
         # Fixed-points
         FIXED_POINTS__STRICT_MODE_PRECISION_LOSS       => 'Value has more than 9 fractional digits and cannot be represented exactly as a Sol amount',
+        LAMPORTS_OUT_OF_RANGE                          => 'Lamports value out of range; must fit in an unsigned 64-bit integer',
 
         # Wallet Standard
         WALLET_STANDARD__INVALID_WIRE_FORMAT           => 'Invalid transaction wire format: %{reason}',

@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -10,6 +12,9 @@ module Solana::Ruby::Kit
       # Returns an Array of { pubkey:, account: AccountInfoWithBase64Data }.
       module GetProgramAccounts
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

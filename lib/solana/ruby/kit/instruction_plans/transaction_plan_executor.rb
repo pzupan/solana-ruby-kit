@@ -9,6 +9,8 @@ module Solana::Ruby::Kit
   module InstructionPlans
     extend T::Sig
 
+    module_function
+
     # Creates a TransactionPlanExecutor — a callable that traverses a TransactionPlan,
     # executing each single transaction message and collecting results.
     #
@@ -48,7 +50,7 @@ module Solana::Ruby::Kit
           )
           # Store the full result tree as a non-enumerable attribute for recovery.
           err.instance_variable_set(:@transaction_plan_result, result)
-          err.define_singleton_method(:transaction_plan_result) { @transaction_plan_result }
+          err.define_singleton_method(:transaction_plan_result) { result }
           Kernel.raise err
         end
 
@@ -56,11 +58,11 @@ module Solana::Ruby::Kit
       }
     end
 
-    module_function :create_transaction_plan_executor
-
     # ── Private helpers ────────────────────────────────────────────────────────
 
     module_function
+
+    sig { params(plan: T.untyped, execute_fn: T.untyped, state: T.untyped).returns(T.untyped) }
 
     def executor_traverse(plan, execute_fn, state)
       case plan.kind
@@ -75,6 +77,8 @@ module Solana::Ruby::Kit
       end
     end
 
+    sig { params(plan: T.untyped, execute_fn: T.untyped, state: T.untyped).returns(T.untyped) }
+
     def executor_traverse_sequential(plan, execute_fn, state)
       results = plan.plans.map { |sub| executor_traverse(sub, execute_fn, state) }
       plan.divisible \
@@ -82,10 +86,14 @@ module Solana::Ruby::Kit
         : non_divisible_sequential_transaction_plan_result(results)
     end
 
+    sig { params(plan: T.untyped, execute_fn: T.untyped, state: T.untyped).returns(T.untyped) }
+
     def executor_traverse_parallel(plan, execute_fn, state)
       results = plan.plans.map { |sub| executor_traverse(sub, execute_fn, state) }
       parallel_transaction_plan_result(results)
     end
+
+    sig { params(plan: T.untyped, execute_fn: T.untyped, state: T.untyped).returns(T.untyped) }
 
     def executor_traverse_single(plan, execute_fn, state)
       # A fresh context per single transaction plan. Nothing is populated yet — filling
@@ -136,6 +144,8 @@ module Solana::Ruby::Kit
       returned[:transaction] = transaction if transaction
       returned
     end
+
+    sig { params(result: T.untyped).returns(T.untyped) }
 
     def executor_find_error(result)
       return result.status.error if result.kind == :single && result.status.kind == :failed

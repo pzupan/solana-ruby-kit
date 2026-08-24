@@ -68,11 +68,11 @@ module Solana::Ruby::Kit
 
       if existing_idx.nil?
         append_instructions(message, [new_ix])
-      elsif compute_unit_limit_from_instruction_data(T.must(message.instructions[existing_idx].data)) == limit
+      elsif compute_unit_limit_from_instruction_data(T.must(T.must(message.instructions[existing_idx]).data)) == limit
         message
       else
         new_instructions = message.instructions.dup
-        new_instructions[T.must(existing_idx)] = new_ix
+        new_instructions[existing_idx] = new_ix
         TransactionMessage.new(
           version:               message.version,
           instructions:          new_instructions,
@@ -127,11 +127,11 @@ module Solana::Ruby::Kit
 
       if existing_idx.nil?
         append_instructions(message, [new_ix])
-      elsif loaded_accounts_data_size_limit_from_instruction_data(T.must(message.instructions[existing_idx].data)) == limit
+      elsif loaded_accounts_data_size_limit_from_instruction_data(T.must(T.must(message.instructions[existing_idx]).data)) == limit
         message
       else
         new_instructions = message.instructions.dup
-        new_instructions[T.must(existing_idx)] = new_ix
+        new_instructions[existing_idx] = new_ix
         TransactionMessage.new(
           version:               message.version,
           instructions:          new_instructions,

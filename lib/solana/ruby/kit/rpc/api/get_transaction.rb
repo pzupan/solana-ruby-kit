@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 module Solana::Ruby::Kit
   module Rpc
     module Api
@@ -9,6 +11,9 @@ module Solana::Ruby::Kit
       # Returns the raw JSON hash (nil if not found / not yet confirmed).
       module GetTransaction
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         sig do
           params(

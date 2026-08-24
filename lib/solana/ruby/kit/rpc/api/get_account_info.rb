@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative 'has_transport'
+
 require 'base64'
 require_relative '../../rpc_types/account_info'
 
@@ -16,6 +18,9 @@ module Solana::Ruby::Kit
       #            (nil when the account does not exist)
       module GetAccountInfo
         extend T::Sig
+        extend T::Helpers
+
+        requires_ancestor { HasTransport }
 
         SUPPORTED_ENCODINGS = T.let(%w[base64 jsonParsed base64+zstd].freeze, T::Array[String])
 
