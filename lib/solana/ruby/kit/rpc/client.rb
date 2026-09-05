@@ -7,6 +7,7 @@ require_relative 'api/get_slot'
 require_relative 'api/get_balance'
 require_relative 'api/get_latest_blockhash'
 require_relative 'api/get_account_info'
+require_relative 'api/get_ag_genesis_cert'
 require_relative 'api/get_block_height'
 require_relative 'api/get_signature_statuses'
 require_relative 'api/send_transaction'
@@ -51,6 +52,7 @@ module Solana::Ruby::Kit
       include Api::GetBalance
       include Api::GetLatestBlockhash
       include Api::GetAccountInfo
+      include Api::GetAgGenesisCert
       include Api::GetBlockHeight
       include Api::GetSignatureStatuses
       include Api::SendTransaction

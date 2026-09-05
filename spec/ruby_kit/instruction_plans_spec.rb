@@ -347,4 +347,193 @@ RSpec.describe RubyKit::InstructionPlans do
       expect(result.status.context).to be_frozen
     end
   end
+
+  # ── create_transaction_plan_executor_with_concurrent_leaves ────────────────
+
+  describe '.create_transaction_plan_executor_with_concurrent_leaves' do
+    let(:fee_payer_kp) { RbNaCl::SigningKey.generate }
+    let(:fee_payer) { RubyKit::Addresses.get_address_from_public_key(fee_payer_kp.verify_key) }
+    let(:blockhash_constraint) do
+      RubyKit::TransactionMessages::BlockhashLifetimeConstraint.new(
+        blockhash: '4PZNQ5MjgFMRSAEKFbMrgCkKAJAV2VEDiJFy1JoqyN3f',
+        last_valid_block_height: 9999
+      )
+    end
+    let(:message) do
+      RubyKit::TransactionMessages.create_transaction_message(version: :legacy)
+        .then { |m| RubyKit::TransactionMessages.set_fee_payer(fee_payer, m) }
+        .then { |m| RubyKit::TransactionMessages.set_blockhash_lifetime(blockhash_constraint, m) }
+    end
+
+    it 'executes a single-message plan and returns a successful result' do
+      tx = RubyKit::Transactions.compile_transaction_message(message)
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) { { transaction: tx } }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.kind).to eq(:single)
+      expect(result.status.kind).to eq(:successful)
+      expect(result.status.transaction).to eq(tx)
+    end
+
+    it 'preserves the plan structure, order and divisibility in the result' do
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) { {} }
+      )
+
+      plan = described_class.parallel_transaction_plan([
+        described_class.non_divisible_sequential_transaction_plan([
+          described_class.single_transaction_plan(message),
+          described_class.single_transaction_plan(message)
+        ]),
+        described_class.single_transaction_plan(message)
+      ])
+      result = executor.call(plan)
+
+      expect(result.kind).to eq(:parallel)
+      expect(result.plans.length).to eq(2)
+      expect(result.plans[0].kind).to eq(:sequential)
+      expect(result.plans[0].divisible).to be false
+      expect(result.plans[0].plans.map(&:kind)).to eq(%i[single single])
+      expect(result.plans[1].kind).to eq(:single)
+    end
+
+    it 'executes non-divisible sequential plans rather than rejecting them' do
+      calls    = Queue.new
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) {
+          calls << 1
+          {}
+        }
+      )
+
+      plan = described_class.non_divisible_sequential_transaction_plan([
+        described_class.single_transaction_plan(message),
+        described_class.single_transaction_plan(message)
+      ])
+      result = executor.call(plan)
+
+      expect(calls.size).to eq(2)
+      expect(result.plans.map { |p| p.status.kind }).to eq(%i[successful successful])
+    end
+
+    it 'runs every leaf to completion even when one raises, and cancels nothing' do
+      calls    = Queue.new
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, msg) {
+          calls << msg
+          raise RubyKit::SolanaError.new(RubyKit::SolanaError::TRANSACTIONS__BLOCKHASH_NOT_FOUND) if calls.size == 1
+          {}
+        }
+      )
+
+      plan = described_class.sequential_transaction_plan([
+        described_class.single_transaction_plan(message),
+        described_class.single_transaction_plan(message),
+        described_class.single_transaction_plan(message)
+      ])
+
+      error = nil
+      expect { executor.call(plan) }.to raise_error(RubyKit::SolanaError) { |e| error = e }
+
+      expect(calls.size).to eq(3)
+      statuses = error.transaction_plan_result.plans.map { |p| p.status.kind }
+      expect(statuses).to include(:failed)
+      expect(statuses).not_to include(:canceled)
+    end
+
+    it 'carries the complete result tree on the raised error' do
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) {
+          raise RubyKit::SolanaError.new(RubyKit::SolanaError::TRANSACTIONS__BLOCKHASH_NOT_FOUND)
+        }
+      )
+
+      error = nil
+      expect {
+        executor.call(described_class.single_transaction_plan(message))
+      }.to raise_error(RubyKit::SolanaError) { |e| error = e }
+
+      expect(error.code).to eq(RubyKit::SolanaError::INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)
+      expect(error.transaction_plan_result.kind).to eq(:single)
+      expect(error.transaction_plan_result.status.kind).to eq(:failed)
+    end
+
+    it 'preserves the context accumulated before a failure' do
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(context, _msg) {
+          context[:started] = true
+          raise RubyKit::SolanaError.new(RubyKit::SolanaError::TRANSACTIONS__BLOCKHASH_NOT_FOUND)
+        }
+      )
+
+      error = nil
+      expect {
+        executor.call(described_class.single_transaction_plan(message))
+      }.to raise_error(RubyKit::SolanaError) { |e| error = e }
+
+      expect(error.transaction_plan_result.status.context).to eq({ started: true })
+    end
+
+    it 'merges the returned context over the stored one, the returned value winning' do
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(context, _msg) {
+          context[:started_at] = 1
+          context[:signature]  = 'stored'
+          { signature: 'returned' }
+        }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.context).to eq({ started_at: 1, signature: 'returned' })
+    end
+
+    it 'accepts the legacy one-argument callback shape' do
+      tx       = RubyKit::Transactions.compile_transaction_message(message)
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_msg) { { transaction: tx } }
+      )
+      result = executor.call(described_class.single_transaction_plan(message))
+
+      expect(result.status.transaction).to eq(tx)
+    end
+
+    it 'starts every leaf before any of them finishes' do
+      leaf_count = 3
+      barrier    = Queue.new
+      arrived    = Queue.new
+      executor   = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) {
+          arrived << 1
+          # Blocks until every leaf has been started, which can only happen if they
+          # are genuinely running at the same time rather than one after another.
+          barrier.pop
+          {}
+        }
+      )
+
+      plan = described_class.sequential_transaction_plan(
+        Array.new(leaf_count) { described_class.single_transaction_plan(message) }
+      )
+
+      thread = Thread.new { executor.call(plan) }
+      leaf_count.times { arrived.pop }
+      leaf_count.times { barrier << 1 }
+      result = thread.value
+
+      expect(result.plans.map { |p| p.status.kind }).to eq(%i[successful successful successful])
+    end
+
+    it 'raises on an unknown plan kind' do
+      executor = described_class.create_transaction_plan_executor_with_concurrent_leaves(
+        execute_transaction_message: ->(_context, _msg) { {} }
+      )
+      bogus = Struct.new(:kind).new(:nonsense)
+
+      expect { executor.call(bogus) }.to raise_error(RubyKit::SolanaError) { |e|
+        expect(e.code).to eq(RubyKit::SolanaError::INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND)
+      }
+    end
+  end
 end

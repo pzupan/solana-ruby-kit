@@ -292,6 +292,30 @@ RSpec.describe RubyKit::Rpc::Client do
   end
 
   # ---------------------------------------------------------------------------
+  # get_ag_genesis_cert
+  # ---------------------------------------------------------------------------
+  describe '#get_ag_genesis_cert' do
+    it 'returns an AgGenesisCert struct with the block and signature' do
+      stub_rpc('getAgGenesisCert', result: {
+        'block'     => { 'blockId' => [1, 2, 3], 'slot' => 42 },
+        'signature' => { 'bitmap' => [7, 8, 9], 'signature' => [4, 5, 6] }
+      })
+
+      cert = client.get_ag_genesis_cert
+      expect(cert.block.slot).to           eq(42)
+      expect(cert.block.block_id).to       eq([1, 2, 3])
+      expect(cert.signature.bitmap).to     eq([7, 8, 9])
+      expect(cert.signature.signature).to  eq([4, 5, 6])
+    end
+
+    it 'returns nil when the node has no Alpenglow genesis certificate' do
+      stub_rpc('getAgGenesisCert', result: nil)
+
+      expect(client.get_ag_genesis_cert).to be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # get_epoch_schedule
   # ---------------------------------------------------------------------------
   describe '#get_epoch_schedule' do

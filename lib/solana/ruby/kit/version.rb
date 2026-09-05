@@ -4,7 +4,7 @@
 module Solana
   module Ruby
     module Kit
-      VERSION = '7.1.1.2'
+      VERSION = '8.2.0'
     end
   end
 end

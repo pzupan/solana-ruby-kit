@@ -60,6 +60,10 @@ module Solana::Ruby::Kit
     TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE = :SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE
     # context: { unsupported_version: }
     TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED            = :SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED
+    # context: { compute_unit_limit:, max_compute_unit_limit: }
+    TRANSACTION__COMPUTE_UNIT_LIMIT_OUT_OF_RANGE         = :SOLANA_ERROR__TRANSACTION__COMPUTE_UNIT_LIMIT_OUT_OF_RANGE
+    # context: { heap_size:, max_heap_size:, min_heap_size:, multiple_of: }
+    TRANSACTION__INVALID_HEAP_SIZE                       = :SOLANA_ERROR__TRANSACTION__INVALID_HEAP_SIZE
     TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE     = :SOLANA_ERROR__TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE
     TRANSACTIONS__BLOCKHASH_NOT_FOUND                    = :SOLANA_ERROR__TRANSACTIONS__BLOCKHASH_NOT_FOUND
     TRANSACTIONS__FAILED_TRANSACTION_PLAN                = :SOLANA_ERROR__TRANSACTIONS__FAILED_TRANSACTION_PLAN
@@ -207,6 +211,8 @@ module Solana::Ruby::Kit
         TRANSACTIONS__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND => 'Failed to decompile instruction: program address not found at index %{index}',
         TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE => 'Failed to decompile instruction: account index %{index} is out of range',
         TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED        => 'Transaction version %{unsupported_version} is not supported',
+        TRANSACTION__COMPUTE_UNIT_LIMIT_OUT_OF_RANGE     => 'Transaction compute unit limit must be an integer in the range [0, %{max_compute_unit_limit}]. `%{compute_unit_limit}` given',
+        TRANSACTION__INVALID_HEAP_SIZE                   => 'Transaction heap size must be an integer multiple of %{multiple_of} bytes in the range [%{min_heap_size}, %{max_heap_size}]. `%{heap_size}` given',
         TRANSACTIONS__SEND_TRANSACTION_PREFLIGHT_FAILURE => 'Transaction simulation failed: %{message}',
         TRANSACTIONS__BLOCKHASH_NOT_FOUND                => 'Blockhash not found',
         TRANSACTIONS__FAILED_TRANSACTION_PLAN            => 'Failed to execute transaction plan',

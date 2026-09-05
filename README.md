@@ -189,8 +189,16 @@ msg = TxMsg.append_instructions(msg, [instruction])
 msg = TxMsg.prepend_instructions(msg, [priority_fee_ix])
 
 # Compute unit limit (SetComputeUnitLimit instruction from the Compute Budget program)
+# The limit is validated: it must be an integer in [0, MAX_COMPUTE_UNIT_LIMIT] (1,400,000).
+# The runtime silently clamps a larger request rather than failing, so asking for more than
+# the maximum would run on a budget you did not ask for — this raises instead.
 msg = TxMsg.set_transaction_message_compute_unit_limit(200_000, msg)
 TxMsg.get_transaction_message_compute_unit_limit(msg)  # => 200_000
+
+# The check is also available on its own, alongside one for heap frame sizes — a whole
+# number of KiB in [MIN_HEAP_SIZE, MAX_HEAP_SIZE] (32 KiB to 256 KiB).
+TxMsg.assert_is_valid_compute_unit_limit(200_000)
+TxMsg.assert_is_valid_heap_size(64 * 1024)
 
 # Loaded accounts data size limit
 msg = TxMsg.set_transaction_message_loaded_accounts_data_size_limit(64_000, msg)
@@ -274,6 +282,7 @@ rpc.get_block_time(slot)
 rpc.get_inflation_reward([address])
 rpc.get_signatures_for_address(address)
 rpc.get_vote_accounts
+rpc.get_ag_genesis_cert                      # Alpenglow genesis cert, or nil
 rpc.simulate_transaction(encoded_tx)
 rpc.send_transaction(encoded_tx)
 rpc.request_airdrop(address, lamports)        # devnet / testnet only
@@ -639,6 +648,21 @@ result = executor.call(transaction_plan)
 
 # A one-argument lambda returning { transaction:, context: } — the shape this method
 # required before v7.1.0 — is still accepted and adapted onto the flow above.
+
+# ── 3b. Executing every leaf concurrently ────────────────────────────────────
+# For work that has no execution dependencies — signing or serializing, say —
+# create_transaction_plan_executor_with_concurrent_leaves takes the same callback
+# contract but starts every leaf immediately, each on its own thread. It preserves
+# the plan's nesting, order and divisibility in the result, supports non-divisible
+# sequential plans, and cancels nothing: a leaf that raises does not stop the others,
+# so every leaf runs to completion before the failure is reported. Because the leaves
+# run at the same time, the callback must be safe to call concurrently with itself.
+concurrent = Plans.create_transaction_plan_executor_with_concurrent_leaves(
+  execute_transaction_message: ->(_context, message) {
+    { transaction: Kit::Transactions.compile_transaction_message(message) }
+  }
+)
+result = concurrent.call(transaction_plan)
 
 # ── 4. Plan types ─────────────────────────────────────────────────────────────
 Plans.single_instruction_plan(ix)                      # wrap one instruction

@@ -58,6 +58,57 @@ module Solana::Ruby::Kit
       }
     end
 
+    # Creates a TransactionPlanExecutor that processes every leaf concurrently.
+    #
+    # It takes the same configuration as +create_transaction_plan_executor+ and its
+    # +execute_transaction_message+ callback follows the same contract: it receives a fresh
+    # mutable +context+ Hash for every leaf and returns the Hash a successful result should
+    # carry. On success the two are merged with the returned value winning; when the callback
+    # raises, the context accumulated so far is preserved on the failed result. The legacy
+    # one-argument callable shape is accepted here too.
+    #
+    # The difference is the traversal. This executor preserves the input plan's nesting, order
+    # and divisibility in the returned result, but it does not enforce the execution
+    # dependencies expressed by sequential plans: every leaf is started immediately, each on
+    # its own thread, with no concurrency limit. That makes it suitable for work that can be
+    # performed independently, such as signing or serializing transactions. For the same
+    # reason a callback that raises does not cancel the other leaves — each one runs to
+    # completion — and non-divisible sequential plans are supported rather than rejected.
+    #
+    # Once every leaf has settled, a result tree containing any failure raises
+    # INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN carrying the complete tree on its
+    # +transaction_plan_result+ reader.
+    #
+    # Because each leaf runs on its own thread, the callback must be safe to run concurrently
+    # with itself. Each leaf gets its own context Hash, so the contexts do not need guarding,
+    # but anything the callback shares between invocations does.
+    #
+    # Mirrors `createTransactionPlanExecutorWithConcurrentLeaves(config)` from
+    # @solana/instruction-plans.
+    # NOTE: Ruby translation has no abort signal; leaves are never canceled, only failed.
+    sig { params(execute_transaction_message: T.untyped).returns(T.untyped) }
+    def create_transaction_plan_executor_with_concurrent_leaves(execute_transaction_message:)
+      ->(transaction_plan) {
+        # Traversal spawns every leaf's thread on the way down and returns a tree of thunks;
+        # resolving them afterwards is what joins the threads, so all leaves are already in
+        # flight before the first one is waited on.
+        result = concurrent_executor_traverse(transaction_plan, execute_transaction_message).call
+
+        cause = executor_find_error(result)
+        if cause
+          err = SolanaError.new(
+            SolanaError::INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
+            { cause: cause }
+          )
+          err.instance_variable_set(:@transaction_plan_result, result)
+          err.define_singleton_method(:transaction_plan_result) { result }
+          Kernel.raise err
+        end
+
+        result
+      }
+    end
+
     # ── Private helpers ────────────────────────────────────────────────────────
 
     module_function
@@ -145,6 +196,58 @@ module Solana::Ruby::Kit
       returned
     end
 
+    # Returns a thunk that resolves to this plan's result. Leaf threads are started as the
+    # tree is walked, so the whole plan is in flight by the time the outermost thunk is called.
+    sig { params(plan: T.untyped, execute_fn: T.untyped).returns(T.untyped) }
+
+    def concurrent_executor_traverse(plan, execute_fn)
+      case plan.kind
+      when :single
+        thread = Thread.new { concurrent_executor_execute_single(plan, execute_fn) }
+        -> { thread.value }
+      when :sequential, :parallel
+        thunks = plan.plans.map { |sub| concurrent_executor_traverse(sub, execute_fn) }
+        Kernel.lambda do
+          results = thunks.map(&:call)
+          if plan.kind == :parallel
+            parallel_transaction_plan_result(results)
+          elsif plan.divisible
+            sequential_transaction_plan_result(results)
+          else
+            # Unlike the sequential executor, non-divisible plans are supported: nothing
+            # about running every leaf independently depends on the plan being divisible.
+            non_divisible_sequential_transaction_plan_result(results)
+          end
+        end
+      else
+        Kernel.raise SolanaError.new(
+          SolanaError::INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND,
+          { kind: plan.kind }
+        )
+      end
+    end
+
+    # Runs one leaf. Identical to +executor_traverse_single+ except that a failure is recorded
+    # and nothing else — there is no shared cancellation state for it to trip.
+    sig { params(plan: T.untyped, execute_fn: T.untyped).returns(T.untyped) }
+
+    def concurrent_executor_execute_single(plan, execute_fn)
+      context = {}
+
+      begin
+        returned = executor_invoke(execute_fn, context, plan.message)
+        successful_single_transaction_plan_result(plan.message, nil, context.merge(returned))
+      rescue SolanaError => e
+        failed_single_transaction_plan_result(plan.message, e, context)
+      rescue => e
+        wrapped = SolanaError.new(
+          SolanaError::INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
+          { cause: e }
+        )
+        failed_single_transaction_plan_result(plan.message, wrapped, context)
+      end
+    end
+
     sig { params(result: T.untyped).returns(T.untyped) }
 
     def executor_find_error(result)
@@ -164,5 +267,7 @@ module Solana::Ruby::Kit
     private_class_method :executor_traverse_single
     private_class_method :executor_invoke
     private_class_method :executor_find_error
+    private_class_method :concurrent_executor_traverse
+    private_class_method :concurrent_executor_execute_single
   end
 end

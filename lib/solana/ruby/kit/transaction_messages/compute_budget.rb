@@ -4,6 +4,7 @@
 require_relative '../addresses/address'
 require_relative '../instructions/instruction'
 require_relative 'transaction_message'
+require_relative 'resource_limit_validation'
 
 module Solana::Ruby::Kit
   module TransactionMessages
@@ -63,6 +64,7 @@ module Solana::Ruby::Kit
     # SetComputeUnitLimit instruction. Mirrors `setTransactionMessageComputeUnitLimit`.
     sig { params(limit: Integer, message: TransactionMessage).returns(TransactionMessage) }
     def set_transaction_message_compute_unit_limit(limit, message)
+      assert_is_valid_compute_unit_limit(limit)
       existing_idx = message.instructions.index { |i| set_compute_unit_limit_instruction?(i) }
       new_ix = get_set_compute_unit_limit_instruction(limit)
 
